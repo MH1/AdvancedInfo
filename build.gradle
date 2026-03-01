@@ -1,0 +1,243 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+
+import java.time.ZoneOffset
+
+plugins {
+    id 'java'
+    id 'org.jetbrains.gradle.plugin.idea-ext' version '1.3'
+}
+
+// -------------------------------------------------------------------------
+// Version assembly
+//
+// release_type (set in gradle.properties) controls the jar name:
+//
+//   TEST     -> 1.0.0.<buildNumber>   (internal only, unique per build)
+//   SNAPSHOT -> 1.0.0-SNAPSHOT        (alpha / pre-release; bump plugin_version before tagging)
+//   RELEASE  -> 1.0.0                 (production;          bump plugin_version before tagging)
+//
+// manifestVersion follows the same tier but is always valid semver
+// (<major>.<minor>.<patch> or <major>.<minor>.<patch>-<pre-release>):
+//
+//   TEST     -> 1.0.0-dev.<buildNumber>   (pre-release tag keeps it 3-segment)
+//   SNAPSHOT -> 1.0.0-SNAPSHOT
+//   RELEASE  -> 1.0.0
+// -------------------------------------------------------------------------
+
+def buildDate   = ZonedDateTime.now(ZoneOffset.UTC)
+def buildNumber = buildDate.toLocalTime().toSecondOfDay()
+def tier        = (release_type ?: 'TEST').trim().toUpperCase()
+
+def manifestVersion
+switch (tier) {
+    case 'RELEASE':
+        version         = plugin_version
+        manifestVersion = plugin_version
+        break
+    case 'SNAPSHOT':
+        version         = plugin_version + '-SNAPSHOT'
+        manifestVersion = plugin_version + '-SNAPSHOT'
+        break
+    default: // TEST
+        version         = plugin_version + '.' + buildNumber
+        manifestVersion = plugin_version + '-dev.' + buildNumber
+        break
+}
+
+// Ensure the jar is always named AdvancedInfo-<version>.jar regardless of
+// the rootProject.name casing that Gradle might resolve.
+jar {
+    archiveBaseName = 'AdvancedInfo'
+    archiveVersion  = version as String
+    archiveClassifier = ''
+}
+
+ext {
+    hytaleHome = "${System.getProperty("user.home")}/AppData/Roaming/Hytale"
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version)
+    withSourcesJar()
+    withJavadocJar()
+}
+
+// Quiet warnings about missing Javadocs.
+javadoc {
+    options.addStringOption('Xdoclint:-missing', '-quiet')
+}
+
+repositories {
+    mavenCentral()
+    maven { url = "https://maven.hytale-modding.info/releases" }
+}
+
+// Adds the Hytale server as a build dependency, allowing you to reference and
+// compile against their code. This requires you to have Hytale installed using
+// the official launcher for now.
+dependencies {
+    implementation(files("$hytaleHome/install/$patchline/package/game/latest/Server/HytaleServer.jar"))
+
+    compileOnly("com.buuz135:MultipleHUD:1.0.6")
+    runtimeOnly("com.buuz135:MultipleHUD:1.0.6")
+}
+
+// Create the working directory to run the server if it does not already exist.
+def serverRunDir = file("$projectDir/run")
+if (!serverRunDir.exists()) {
+    serverRunDir.mkdirs()
+}
+
+// Updates the manifest.json file with the latest properties defined in the
+// build.properties file. Currently we update the version and if packs are
+// included with the plugin.
+tasks.register('updatePluginManifest') {
+    def manifestFile = file('src/main/resources/manifest.json')
+    def pluginVersion = manifestVersion
+    doLast {
+        if (!manifestFile.exists()) {
+            throw new GradleException("Could not find manifest.json at ${manifestFile.path}!")
+        }
+        def manifestJson = new groovy.json.JsonSlurper().parseText(manifestFile.text)
+        manifestJson.Version = pluginVersion
+        manifestJson.IncludesAssetPack = includes_pack.toBoolean()
+        manifestJson.ServerVersion = server_version
+        manifestFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(manifestJson))
+    }
+}
+
+// Makes sure the plugin manifest is up to date.
+tasks.named('processResources') {
+    dependsOn 'updatePluginManifest'
+    dependsOn 'generateHudUiFiles'
+    from(tasks.named('generateHudUiFiles').map { it.outputs.files.singleFile })
+}
+
+tasks.named('sourcesJar') {
+    dependsOn 'generateHudUiFiles'
+    from(tasks.named('generateHudUiFiles').map { it.outputs.files.singleFile })
+}
+
+tasks.register('generateHudUiFiles') {
+    def outputDir = file("${buildDir}/generated-hud-ui")
+    outputs.dir(outputDir)
+    doLast {
+        def hudDir = new File(outputDir, 'Common/UI/Custom/AdvancedInfo/HUD/generated')
+        hudDir.mkdirs()
+        def bg = 'PatchStyle(TexturePath: "../../../Common/TooltipDefaultBackground.png", Border: 20)'
+        for (int fs = 8; fs <= 32; fs++) {
+            float scale      = fs / 18f
+            int captionSize   = Math.round(fs * 13f / 18f)
+            int sourceSize    = Math.round(fs * 12f / 18f)
+            int captionTopPad = (int) Math.max(0, (int)((fs - captionSize) / 2))
+            int overlayBarH  = fs + 6
+            int rowBottomPad = (int) Math.round(4 * scale)
+            int rowsVPad     = (int) Math.round(3 * scale)
+            int barHBelow    = (int) Math.max(1, Math.round(6 * scale))
+            int barHSpacer   = (int) Math.max(1, Math.round(6 * scale))
+            int minWCaption   = Math.round(50  * scale)
+            int minWTime      = Math.round(220 * scale)
+            int minWPosition  = Math.round(180 * scale)
+            int minWBiome     = Math.round(190 * scale)
+            int minWZone      = Math.round(120 * scale)
+            int minWWorldTime = Math.round(80  * scale)
+            int minWTarget    = Math.round(300 * scale)
+            String vStyle      = "LabelStyle(FontSize: ${fs})"
+            String captionStyle = "LabelStyle(FontSize: ${captionSize}, TextColor: #aaaaaa)"
+            String sStyle      = "LabelStyle(FontSize: ${sourceSize}, RenderBold: true, TextColor: #6699cc)"
+            String captionPad  = "Right: 6, Top: ${captionTopPad}"
+            def content = """\
+Group #AIHHud {
+  Padding: (Full: 10);
+  Group #AIHInner {
+    Group #AIHOffset {
+      Group #AIHContent {
+        Background: ${bg};
+        Padding: (Horizontal: 28, Vertical: 10);
+        Group #AIHRows {
+          LayoutMode: Top;
+          Padding: (Vertical: ${rowsVPad});
+          Group #AIHTopSpacer { Anchor: (Height: ${rowBottomPad}); }
+          Group #AIHTimeRow {
+            LayoutMode: Left;
+            Padding: (Bottom: ${rowBottomPad});
+            Label #AIHTimeCaption { Style: ${captionStyle}; Text: "Time"; Anchor: (MinWidth: ${minWCaption}); Padding: (${captionPad}); }
+            Label #AIHTimeText { Style: ${vStyle}; Anchor: (MinWidth: ${minWTime}); }
+          }
+          Group #AIHPositionRow {
+            LayoutMode: Left;
+            Padding: (Bottom: ${rowBottomPad});
+            Label #AIHPositionCaption { Style: ${captionStyle}; Text: "XYZ"; Anchor: (MinWidth: ${minWCaption}); Padding: (${captionPad}); }
+            Label #AIHPositionText { Style: ${vStyle}; Anchor: (MinWidth: ${minWPosition}); }
+          }
+          Group #AIHBiomeRow {
+            LayoutMode: Left;
+            Padding: (Bottom: ${rowBottomPad});
+            Label #AIHBiomeCaption { Style: ${captionStyle}; Text: "Biome"; Anchor: (MinWidth: ${minWCaption}); Padding: (${captionPad}); }
+            Label #AIHBiomeText { Style: ${vStyle}; Anchor: (MinWidth: ${minWBiome}); }
+          }
+          Group #AIHZoneRow {
+            LayoutMode: Left;
+            Padding: (Bottom: ${rowBottomPad});
+            Label #AIHZoneCaption { Style: ${captionStyle}; Text: " "; Anchor: (MinWidth: ${minWCaption}); Padding: (${captionPad}); }
+            Label #AIHZoneText { Style: ${vStyle}; Anchor: (MinWidth: ${minWZone}); }
+          }
+          Group #AIHWorldTimeRow {
+            LayoutMode: Left;
+            Label #AIHWorldTimeCaption { Style: ${captionStyle}; Text: "World"; Anchor: (MinWidth: ${minWCaption}); Padding: (${captionPad}); }
+            Label #AIHWorldTimeText { Style: ${vStyle}; Anchor: (MinWidth: ${minWWorldTime}); }
+          }
+          Group #AIHTargetRow {
+            LayoutMode: Left;
+            Padding: (Bottom: ${rowBottomPad});
+            Label #AIHTargetCaption { Style: ${captionStyle}; Text: "Target"; Anchor: (MinWidth: ${minWCaption}); Padding: (${captionPad}); }
+            Group #AIHTargetValueGroup {
+              LayoutMode: Top;
+              Anchor: (MinWidth: ${minWTarget});
+              Group #AIHTargetBarBelow {
+                LayoutMode: Top;
+                Label #AIHTargetTextBelow { Style: ${vStyle}; }
+                Group #AIHHealthBarBelow {
+                  LayoutMode: Left;
+                  Anchor: (Height: ${barHBelow}, Left: 0, Right: 0);
+                  Group #AIHHealthBarBelowFill { Background: (Color: #44aa44); }
+                  Group #AIHHealthBarBelowRemainder { Background: (Color: #333333); }
+                }
+                Label #AIHTargetSourceTextBelow { Style: ${sStyle}; }
+              }
+              Group #AIHTargetBarOverlay {
+                LayoutMode: Top;
+                Group #AIHHealthBarOverlay {
+                  LayoutMode: Left;
+                  Anchor: (Height: ${overlayBarH}, Left: 0, Right: 0);
+                  Group #AIHHealthBarOverlayFill { Background: (Color: #44aa44); }
+                  Group #AIHHealthBarOverlayRemainder { Background: (Color: #333333); }
+                }
+                Label #AIHTargetTextOverlay { Style: ${vStyle}; Anchor: (Top: -${overlayBarH}); Padding: (Left: 4); }
+                Label #AIHTargetSourceTextOverlay { Style: ${sStyle}; }
+              }
+              Group #AIHTargetBarNone {
+                LayoutMode: Top;
+                Label #AIHTargetTextNone { Style: ${vStyle}; }
+                Group #AIHTargetBarNoneSpacer { Anchor: (Height: ${barHSpacer}); }
+                Label #AIHTargetSourceTextNone { Style: ${sStyle}; }
+              }
+              Group #AIHTargetBarNoBar {
+                LayoutMode: Top;
+                Label #AIHTargetTextNoBar { Style: ${vStyle}; }
+                Label #AIHTargetSourceTextNoBar { Style: ${sStyle}; }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+            new File(hudDir, "InfoHud_${fs}.ui").text = content
+        }
+        logger.lifecycle("Generated HUD .ui files for font sizes 8-32.")
+    }
+}
