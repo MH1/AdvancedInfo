@@ -1,6 +1,6 @@
 # Changelog
 
-## Not Released
+## v1.0.0-SNAPSHOT (2026-03-01)
 
 - HUD panel with real-time clock, biome, XYZ position, world time, zone/tier, and target info
 - Target health bar with `below` and `overlay` display styles and a health-gradient color
