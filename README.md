@@ -4,6 +4,8 @@ A Hytale server plugin that displays a configurable information HUD with real-ti
 
 If the [MultipleHUD](https://www.curseforge.com/hytale/mods/multiplehud) mod is present, AdvancedInfo integrates with it automatically, allowing it to coexist alongside other mods that use a custom HUD slot.
 
+![Preview](docs/images/preview.png)
+
 ## HUD Panels
 
 - **Real time** - the server's current wall-clock time.
