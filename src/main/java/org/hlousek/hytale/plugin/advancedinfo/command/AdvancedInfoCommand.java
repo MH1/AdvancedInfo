@@ -10,6 +10,7 @@ import com.hypixel.hytale.server.core.command.system.arguments.system.RequiredAr
 import com.hypixel.hytale.server.core.command.system.arguments.types.SingleArgumentType;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractCommandCollection;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
+import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
@@ -17,6 +18,7 @@ import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings.HorizontalAlign;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings.ProgressBarStyle;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings.VerticalAlign;
+import org.hlousek.hytale.plugin.advancedinfo.ui.SettingsPage;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -40,6 +42,7 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
         addSubCommand(new StatusSubCommand(settingsComponentType));
         addSubCommand(new HealthBarSubCommand(settingsComponentType));
         addSubCommand(new FontSubCommand(settingsComponentType));
+        addSubCommand(new UiSubCommand(settingsComponentType));
     }
 
     private static PlayerHudSettings getSettings(
@@ -515,6 +518,35 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
             }
             getSettings(store, ref, type).setFontSize(size);
             playerRef.sendMessage(Message.raw("Font size set to " + size + "."));
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // /ai ui
+    // -------------------------------------------------------------------------
+
+    private static class UiSubCommand extends AbstractPlayerCommand {
+
+        private final ComponentType<EntityStore, PlayerHudSettings> type;
+
+        public UiSubCommand(@Nonnull ComponentType<EntityStore, PlayerHudSettings> type) {
+            super("ui", "Open the Advanced Info settings UI.");
+            this.type = type;
+        }
+
+        @Override
+        protected void execute(
+            @Nonnull CommandContext ctx,
+            @Nonnull Store<EntityStore> store,
+            @Nonnull Ref<EntityStore> ref,
+            @Nonnull PlayerRef playerRef,
+            @Nonnull World world
+        ) {
+            Player player = store.getComponent(ref, Player.getComponentType());
+            if (player == null) return;
+
+            SettingsPage page = new SettingsPage(playerRef, type, () -> {});
+            player.getPageManager().openCustomPage(ref, store, page);
         }
     }
 

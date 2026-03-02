@@ -84,6 +84,14 @@ public class HudToggleRegistry {
             true
         ));
 
+        register(map, new HudToggleEntry(
+            "captions",
+            "all HUD element captions",
+            s -> s.setCaptionsEnabled(true),
+            s -> s.setCaptionsEnabled(false),
+            PlayerHudSettings::isCaptionsEnabled
+        ));
+
         ENTRIES = Collections.unmodifiableMap(map);
     }
 

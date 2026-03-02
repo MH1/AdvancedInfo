@@ -83,6 +83,7 @@ public class InfoManager {
             && Objects.equals(hud.getTargetBar().getSecondLine(), content.targetSourceText())
             && hud.getTargetBar().getProgress()   == content.targetHealthPct()
             && hud.isTargetEnabled()               == content.targetEnabled()
+            && hud.isCaptionsEnabled()             == content.captionsEnabled()
             && hud.getTargetBar().isBarVisible()   == content.healthBarEnabled()
             && hud.getTargetBar().getMode()        == content.healthBarStyle()
             && hud.getHorizontalAlign()            == content.horizontalAlign()

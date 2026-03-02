@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased Changes
+
+- Added `/ai ui` command to open the settings UI page.
+- Added `/ai show captions` and `/ai hide captions` commands to toggle the visibility of all captions.
+- Bugfix: Resolved an issue where the HUD would not resolve the name of some objects.
+- Several minor bugfixes
+
 ## v1.0.0-SNAPSHOT (2026-03-01)
 
 - HUD panel with real-time clock, biome, XYZ position, world time, zone/tier, and target info

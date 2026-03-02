@@ -123,6 +123,7 @@ tasks.register('generateHudUiFiles') {
     def outputDir = file("${buildDir}/generated-hud-ui")
     outputs.dir(outputDir)
     doLast {
+        // --- HUD files ---
         def hudDir = new File(outputDir, 'Common/UI/Custom/AdvancedInfo/HUD/generated')
         hudDir.mkdirs()
         def bg = 'PatchStyle(TexturePath: "../../../Common/TooltipDefaultBackground.png", Border: 20)'
@@ -239,5 +240,172 @@ Group #AIHHud {
             new File(hudDir, "InfoHud_${fs}.ui").text = content
         }
         logger.lifecycle("Generated HUD .ui files for font sizes 8-32.")
+
+        // --- Settings page file ---
+        def pagesDir = new File(outputDir, 'Common/UI/Custom/AdvancedInfo/Pages')
+        pagesDir.mkdirs()
+        def ui = '''\
+$C = "../../Common.ui";
+
+@RowLabelStyle = LabelStyle(FontSize: 14, TextColor: #bfcdd5, VerticalAlignment: Center);
+@FieldLabelStyle = LabelStyle(FontSize: 14, TextColor: #96a9be, VerticalAlignment: Center);
+
+@CheckboxRow = Group {
+  LayoutMode: Left;
+  Anchor: (Height: 30);
+  Padding: (Vertical: 2);
+};
+
+@FieldRow = Group {
+  LayoutMode: Left;
+  Anchor: (Height: 34);
+  Padding: (Vertical: 3);
+};
+
+@SectionCard = Group {
+  LayoutMode: Top;
+  Padding: (Full: 10);
+  Background: #1a2533(0.6);
+  OutlineColor: #3a4a5a(0.5);
+  OutlineSize: 1;
+};
+
+@ButtonStyle = TextButtonStyle(
+  Default: (Background: $C.@DefaultSquareButtonDefaultBackground, LabelStyle: (FontSize: 13, TextColor: #bfcdd5, RenderBold: true, RenderUppercase: true, HorizontalAlignment: Center, VerticalAlignment: Center)),
+  Hovered: (Background: $C.@DefaultSquareButtonHoveredBackground, LabelStyle: (FontSize: 13, TextColor: #ffffff, RenderBold: true, RenderUppercase: true, HorizontalAlignment: Center, VerticalAlignment: Center)),
+  Pressed: (Background: $C.@DefaultSquareButtonPressedBackground, LabelStyle: (FontSize: 13, TextColor: #ffffff, RenderBold: true, RenderUppercase: true, HorizontalAlignment: Center, VerticalAlignment: Center)),
+  Sounds: $C.@ButtonSounds
+);
+
+$C.@PageOverlay {
+  $C.@DecoratedContainer {
+    Anchor: (Width: 520, Height: 660);
+
+    #Title {
+      $C.@Title { @Text = "Advanced Info Settings"; }
+      TextButton #CloseBtn {
+        Anchor: (Left: 12, Top: 4, Width: 64, Height: 24);
+        Padding: (Left: 8, Top: 2);
+        Text: "Close";
+        Style: TextButtonStyle(
+          Default: (LabelStyle: (FontSize: 14, TextColor: #93844c, RenderBold: true)),
+          Sounds: $C.@ButtonSounds
+        );
+        Background: #000000(0.13);
+      }
+    }
+
+    #Content {
+      FlexWeight: 1;
+      LayoutMode: TopScrolling;
+      ScrollbarStyle: $C.@DefaultScrollbarStyle;
+
+      Group {
+        LayoutMode: Top;
+        Padding: (Right: 8);
+
+        Group {
+          LayoutMode: Left;
+          Anchor: (Height: 30, Top: 4);
+          Background: #93844c(0.15);
+          Padding: (Left: 10);
+          Label { Text: "Visibility"; Style: (FontSize: 16, TextColor: #93844c, RenderBold: true); }
+        }
+        @SectionCard { Anchor: (Top: 6);
+          @CheckboxRow { $C.@CheckBox #ChkTime { }           Label { Text: "Time";                         Style: @RowLabelStyle; Anchor: (Left: 10); } }
+          @CheckboxRow { $C.@CheckBox #ChkBiome { }          Label { Text: "Biome";                        Style: @RowLabelStyle; Anchor: (Left: 10); } }
+          @CheckboxRow { $C.@CheckBox #ChkPosition { }       Label { Text: "Position (XYZ)";               Style: @RowLabelStyle; Anchor: (Left: 10); } }
+          @CheckboxRow { $C.@CheckBox #ChkWorldTime { }      Label { Text: "World Time";                   Style: @RowLabelStyle; Anchor: (Left: 10); } }
+          @CheckboxRow { $C.@CheckBox #ChkZone { }           Label { Text: "Zone / Tier";                  Style: @RowLabelStyle; Anchor: (Left: 10); } }
+          @CheckboxRow { $C.@CheckBox #ChkTarget { }         Label { Text: "Target";                       Style: @RowLabelStyle; Anchor: (Left: 10); } }
+          @CheckboxRow { $C.@CheckBox #ChkHealthBar { }      Label { Text: "Health Bar (requires Target)"; Style: @RowLabelStyle; Anchor: (Left: 10); } }
+          @CheckboxRow { $C.@CheckBox #ChkCaptions { }       Label { Text: "Captions";                     Style: @RowLabelStyle; Anchor: (Left: 10); } }
+          @CheckboxRow { $C.@CheckBox #ChkTimezoneOffset { } Label { Text: "Timezone Offset Label";        Style: @RowLabelStyle; Anchor: (Left: 10); } }
+        }
+
+        Group {
+          LayoutMode: Left;
+          Anchor: (Height: 30, Top: 12);
+          Background: #4c7a9c(0.15);
+          Padding: (Left: 10);
+          Label { Text: "Alignment"; Style: (FontSize: 16, TextColor: #4c7a9c, RenderBold: true); }
+        }
+        @SectionCard { Anchor: (Top: 6);
+          @FieldRow {
+            Label { Text: "Horizontal"; Style: @FieldLabelStyle; FlexWeight: 1; }
+            $C.@DropdownBox #DdHAlign { Anchor: (Width: 200, Height: 28); }
+          }
+          @FieldRow {
+            Label { Text: "Vertical"; Style: @FieldLabelStyle; FlexWeight: 1; }
+            $C.@DropdownBox #DdVAlign { Anchor: (Width: 200, Height: 28); }
+          }
+        }
+
+        Group {
+          LayoutMode: Left;
+          Anchor: (Height: 30, Top: 12);
+          Background: #5c8a5c(0.15);
+          Padding: (Left: 10);
+          Label { Text: "Time"; Style: (FontSize: 16, TextColor: #5c8a5c, RenderBold: true); }
+        }
+        @SectionCard { Anchor: (Top: 6);
+          @FieldRow {
+            Label { Text: "Format"; Style: @FieldLabelStyle; FlexWeight: 1; }
+            $C.@DropdownBox #DdTimeFormat { Anchor: (Width: 200, Height: 28); }
+          }
+          @FieldRow {
+            Label { Text: "Timezone"; Style: @FieldLabelStyle; FlexWeight: 1; }
+            $C.@DropdownBox #DdTimezone { Anchor: (Width: 220, Height: 28); }
+          }
+          Group { Anchor: (Top: 6);
+            Label { Text: "Or type a custom IANA timezone ID:"; Style: (FontSize: 13, TextColor: #96a9be, VerticalAlignment: Center); }
+          }
+          $C.@TextField #TfTimezone { Anchor: (Height: 28, Top: 4); }
+        }
+
+        Group {
+          LayoutMode: Left;
+          Anchor: (Height: 30, Top: 12);
+          Background: #9c4c4c(0.15);
+          Padding: (Left: 10);
+          Label { Text: "Target Health Bar"; Style: (FontSize: 16, TextColor: #9c4c4c, RenderBold: true); }
+        }
+        @SectionCard { Anchor: (Top: 6);
+          @FieldRow {
+            Label { Text: "Style"; Style: @FieldLabelStyle; FlexWeight: 1; }
+            $C.@DropdownBox #DdHealthBarStyle { Anchor: (Width: 200, Height: 28); }
+          }
+        }
+
+        Group {
+          LayoutMode: Left;
+          Anchor: (Height: 30, Top: 12);
+          Background: #7c4c9c(0.15);
+          Padding: (Left: 10);
+          Label { Text: "Display"; Style: (FontSize: 16, TextColor: #7c4c9c, RenderBold: true); }
+        }
+        @SectionCard { Anchor: (Top: 6);
+          @FieldRow {
+            Label { Text: "Font Size (8-32)"; Style: @FieldLabelStyle; FlexWeight: 1; }
+            $C.@NumberField #NfFontSize { Anchor: (Width: 120, Height: 28); }
+          }
+        }
+
+        Group {
+          LayoutMode: Left;
+          Anchor: (Height: 38, Top: 14, Bottom: 6);
+          TextButton #BtnSave  { FlexWeight: 1; Text: "SAVE";           Style: @ButtonStyle; }
+          Group { Anchor: (Width: 10); }
+          TextButton #BtnReset { FlexWeight: 1; Text: "RESET DEFAULTS"; Style: @ButtonStyle; }
+        }
+      }
+    }
+  }
+}
+
+$C.@BackButton {}
+'''
+        new File(pagesDir, 'SettingsPage.ui').text = ui
+        logger.lifecycle('Generated SettingsPage.ui.')
     }
 }

@@ -22,6 +22,7 @@ public class InfoHud extends CustomUIHud {
     @Nullable private String worldTimeText;
     private float targetHealthPct = -1f;
     private boolean targetEnabled = false;
+    private boolean captionsEnabled = true;
     @Nonnull private HorizontalAlign horizontalAlign = HorizontalAlign.LEFT;
     @Nonnull private VerticalAlign   verticalAlign   = VerticalAlign.TOP;
 
@@ -67,6 +68,13 @@ public class InfoHud extends CustomUIHud {
         ui.set("#AIHWorldTimeRow.Visible", worldTimeText != null);
         ui.set("#AIHTargetRow.Visible",    targetEnabled);
 
+        ui.set("#AIHTimeCaption.Visible",      captionsEnabled);
+        ui.set("#AIHPositionCaption.Visible",  captionsEnabled);
+        ui.set("#AIHBiomeCaption.Visible",     captionsEnabled);
+        ui.set("#AIHZoneCaption.Visible",      captionsEnabled);
+        ui.set("#AIHWorldTimeCaption.Visible", captionsEnabled);
+        ui.set("#AIHTargetCaption.Visible",    captionsEnabled);
+
         targetBar.apply(ui);
 
         ui.set("#AIHHud.LayoutMode", verticalAlign == VerticalAlign.BOTTOM ? "Bottom" : "Top");
@@ -91,6 +99,7 @@ public class InfoHud extends CustomUIHud {
         this.worldTimeText    = content.worldTimeText();
         this.targetHealthPct  = content.targetHealthPct();
         this.targetEnabled    = content.targetEnabled();
+        this.captionsEnabled  = content.captionsEnabled();
         this.horizontalAlign  = content.horizontalAlign();
         this.verticalAlign    = content.verticalAlign();
         this.fontSize         = content.fontSize();
@@ -117,6 +126,7 @@ public class InfoHud extends CustomUIHud {
     @Nullable public String getPositionText()  { return positionText; }
     @Nullable public String getWorldTimeText() { return worldTimeText; }
     public boolean isTargetEnabled()           { return targetEnabled; }
+    public boolean isCaptionsEnabled()         { return captionsEnabled; }
     public float   getTargetHealthPct()        { return targetHealthPct; }
     public int     getFontSize()               { return fontSize; }
     @Nonnull public HorizontalAlign getHorizontalAlign() { return horizontalAlign; }

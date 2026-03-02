@@ -224,6 +224,7 @@ public class InfoUpdateSystem extends EntityTickingSystem<EntityStore> {
                 if (closest != null) {
                     DisplayNameComponent displayName = store.getComponent(closest, DisplayNameComponent.getComponentType());
                     PlayerRef targetPlayerRef = store.getComponent(closest, PlayerRef.getComponentType());
+                    NPCEntity npcEntity = store.getComponent(closest, NPCEntity.getComponentType());
                     if (displayName != null && displayName.getDisplayName() != null) {
                         targetText = displayName.getDisplayName().getAnsiMessage();
                     }
@@ -233,7 +234,19 @@ public class InfoUpdateSystem extends EntityTickingSystem<EntityStore> {
                         }
                     }
                     if (targetText == null || targetText.isBlank()) {
-                        targetText = closest.toString();
+                        if (npcEntity != null && npcEntity.getRoleName() != null) {
+                            String roleName = npcEntity.getRoleName();
+                            int colon = roleName.indexOf(':');
+                            targetText = colon >= 0 ? roleName.substring(colon + 1) : roleName;
+                        }
+                    }
+                    if (targetText == null || targetText.isBlank()) {
+                        ModelComponent targetModel = store.getComponent(closest, ModelComponent.getComponentType());
+                        if (targetModel != null) {
+                            String modelId = targetModel.getModel().getModelAssetId();
+                            int colon = modelId.indexOf(':');
+                            targetText = colon >= 0 ? modelId.substring(colon + 1) : modelId;
+                        }
                     }
                     EntityStatMap statMap = store.getComponent(closest, EntityStatMap.getComponentType());
                     if (statMap != null) {
@@ -245,7 +258,6 @@ public class InfoUpdateSystem extends EntityTickingSystem<EntityStore> {
                             }
                         }
                     }
-                    NPCEntity npcEntity = store.getComponent(closest, NPCEntity.getComponentType());
                     if (npcEntity != null) {
                         targetSourceText = packOwnerOfNpc(npcEntity.getNPCTypeId());
                     }
@@ -325,6 +337,7 @@ public class InfoUpdateSystem extends EntityTickingSystem<EntityStore> {
             targetHealthPct,
             settings.isTargetEnabled(),
             settings.isHealthBarEnabled(),
+            settings.isCaptionsEnabled(),
             settings.getHealthBarStyle(),
             settings.getHorizontalAlign(),
             settings.getVerticalAlign(),

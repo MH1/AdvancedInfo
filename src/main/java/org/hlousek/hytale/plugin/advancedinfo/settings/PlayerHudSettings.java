@@ -10,7 +10,7 @@ import java.time.ZoneId;
 
 public class PlayerHudSettings implements Component<EntityStore> {
 
-    private static final String CURRENT_VERSION = "1.0.0";
+    private static final String CURRENT_VERSION = "1.0.1";
 
     public enum HorizontalAlign { LEFT, CENTER, RIGHT }
     public enum VerticalAlign   { TOP, BOTTOM }
@@ -25,8 +25,8 @@ public class PlayerHudSettings implements Component<EntityStore> {
     private boolean positionEnabled = true;
     @Since(version = "1.0.0", defaultValue = "true")
     private boolean worldTimeEnabled = true;
-    @Since(version = "1.0.0", defaultValue = "true")
-    private boolean zoneEnabled = false;
+    @Since(version = "1.0.0", defaultValue = "false")
+    private boolean zoneEnabled = true;
     @Since(version = "1.0.0", defaultValue = "true")
     private boolean time24h = true;
     @Since(version = "1.0.0", defaultValue = "UTC")
@@ -45,6 +45,8 @@ public class PlayerHudSettings implements Component<EntityStore> {
     private String healthBarStyle = "OVERLAY";
     @Since(version = "1.0.0", defaultValue = "18")
     private int fontSize = 18;
+    @Since(version = "1.0.1", defaultValue = "true")
+    private boolean captionsEnabled = true;
 
     public PlayerHudSettings() {}
 
@@ -86,6 +88,9 @@ public class PlayerHudSettings implements Component<EntityStore> {
     public int getFontSize()              { return fontSize; }
     public void setFontSize(int v)        { this.fontSize = v; }
 
+    public boolean isCaptionsEnabled()            { return captionsEnabled; }
+    public void setCaptionsEnabled(boolean v)     { this.captionsEnabled = v; }
+
     public HorizontalAlign getHorizontalAlign() {
         try { return HorizontalAlign.valueOf(horizontalAlign); } catch (Exception e) { return HorizontalAlign.LEFT; }
     }
@@ -124,6 +129,7 @@ public class PlayerHudSettings implements Component<EntityStore> {
         copy.healthBarEnabled      = this.healthBarEnabled;
         copy.healthBarStyle        = this.healthBarStyle;
         copy.fontSize              = this.fontSize;
+        copy.captionsEnabled       = this.captionsEnabled;
         copy.time24h               = this.time24h;
         copy.timezone              = this.timezone;
         copy.timezoneOffsetVisible = this.timezoneOffsetVisible;
@@ -154,6 +160,8 @@ public class PlayerHudSettings implements Component<EntityStore> {
                 (c, v) -> c.healthBarStyle = v, c -> c.healthBarStyle).add()
             .append(new KeyedCodec<>("FontSize",             Codec.INTEGER),
                 (c, v) -> c.fontSize = v, c -> c.fontSize).add()
+            .append(new KeyedCodec<>("CaptionsEnabled",      Codec.BOOLEAN),
+                (c, v) -> c.captionsEnabled = v, c -> c.captionsEnabled).add()
             .append(new KeyedCodec<>("Time24h",              Codec.BOOLEAN),
                 (c, v) -> c.time24h = v, c -> c.time24h).add()
             .append(new KeyedCodec<>("Timezone",             Codec.STRING),

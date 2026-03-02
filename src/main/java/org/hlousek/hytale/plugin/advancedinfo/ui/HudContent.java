@@ -18,6 +18,7 @@ public record HudContent(
     float targetHealthPct,
     boolean targetEnabled,
     boolean healthBarEnabled,
+    boolean captionsEnabled,
     @Nonnull ProgressBarStyle healthBarStyle,
     @Nonnull HorizontalAlign horizontalAlign,
     @Nonnull VerticalAlign verticalAlign,
