@@ -1,11 +1,8 @@
-import groovy.json.JsonOutput
-import groovy.json.JsonSlurper
-
 import java.time.ZoneOffset
+import java.time.ZonedDateTime
 
 plugins {
     id 'java'
-    id 'org.jetbrains.gradle.plugin.idea-ext' version '1.3'
 }
 
 // -------------------------------------------------------------------------
@@ -13,7 +10,7 @@ plugins {
 //
 // release_type (set in gradle.properties) controls the jar name:
 //
-//   TEST     -> 1.0.0.<buildNumber>   (internal only, unique per build)
+//   TEST     -> 1.0.0.<buildNumber>   (internal only, unique per commit)
 //   SNAPSHOT -> 1.0.0-SNAPSHOT        (alpha / pre-release; bump plugin_version before tagging)
 //   RELEASE  -> 1.0.0                 (production;          bump plugin_version before tagging)
 //
@@ -23,11 +20,19 @@ plugins {
 //   TEST     -> 1.0.0-dev.<buildNumber>   (pre-release tag keeps it 3-segment)
 //   SNAPSHOT -> 1.0.0-SNAPSHOT
 //   RELEASE  -> 1.0.0
+//
+// buildNumber is the commit count of HEAD so it is monotonic and reproducible;
+// outside a git checkout it falls back to seconds-of-day.
 // -------------------------------------------------------------------------
 
-def buildDate   = ZonedDateTime.now(ZoneOffset.UTC)
-def buildNumber = buildDate.toLocalTime().toSecondOfDay()
-def tier        = (release_type ?: 'TEST').trim().toUpperCase()
+def buildNumber = providers.exec {
+    commandLine 'git', 'rev-list', '--count', 'HEAD'
+    ignoreExitValue = true
+}.standardOutput.asText.map { it.trim() }.getOrElse('')
+if (!buildNumber.isInteger()) {
+    buildNumber = ZonedDateTime.now(ZoneOffset.UTC).toLocalTime().toSecondOfDay().toString()
+}
+def tier = (release_type ?: 'TEST').trim().toUpperCase()
 
 def manifestVersion
 switch (tier) {
@@ -45,16 +50,10 @@ switch (tier) {
         break
 }
 
-// Ensure the jar is always named AdvancedInfo-<version>.jar regardless of
-// the rootProject.name casing that Gradle might resolve.
 jar {
     archiveBaseName = 'AdvancedInfo'
     archiveVersion  = version as String
     archiveClassifier = ''
-}
-
-ext {
-    hytaleHome = "${System.getProperty("user.home")}/AppData/Roaming/Hytale"
 }
 
 java {
@@ -73,339 +72,80 @@ repositories {
     maven { url = "https://maven.hytale-modding.info/releases" }
 }
 
-// Adds the Hytale server as a build dependency, allowing you to reference and
-// compile against their code. This requires you to have Hytale installed using
-// the official launcher for now.
+// -------------------------------------------------------------------------
+// Hytale server jar lookup (compile-time dependency).
+//
+// Resolution order:
+//   1. HYTALE_SERVER_JAR environment variable
+//   2. hytale_server_jar Gradle property (put it in ~/.gradle/gradle.properties)
+//   3. the official launcher install location for the current OS
+// -------------------------------------------------------------------------
+def resolveHytaleServerJar = {
+    def candidates = []
+    def env = System.getenv('HYTALE_SERVER_JAR')
+    if (env) { candidates << file(env) }
+    if (project.hasProperty('hytale_server_jar')) { candidates << file(project.property('hytale_server_jar')) }
+
+    def home = System.getProperty('user.home')
+    def os = System.getProperty('os.name').toLowerCase()
+    def hytaleHomes = os.contains('win') ? ["${home}/AppData/Roaming/Hytale"]
+                    : os.contains('mac') ? ["${home}/Library/Application Support/Hytale"]
+                    : ["${home}/.local/share/Hytale", "${home}/.var/app/com.hypixel.HytaleLauncher/data/Hytale"]
+    hytaleHomes.each { candidates << file("${it}/install/${patchline}/package/game/latest/Server/HytaleServer.jar") }
+
+    def found = candidates.find { it.isFile() }
+    if (found == null) {
+        throw new GradleException(
+            "HytaleServer.jar not found. Checked:\n  " + candidates*.path.join("\n  ") +
+            "\nSet hytale_server_jar in ~/.gradle/gradle.properties or the HYTALE_SERVER_JAR environment variable.")
+    }
+    logger.info("Using Hytale server jar: ${found}")
+    return found
+}
+
 dependencies {
-    implementation(files("$hytaleHome/install/$patchline/package/game/latest/Server/HytaleServer.jar"))
+    implementation(files(provider(resolveHytaleServerJar)))
 
-    compileOnly("com.buuz135:MultipleHUD:1.0.6")
-    runtimeOnly("com.buuz135:MultipleHUD:1.0.6")
+    testImplementation(platform("org.junit:junit-bom:5.11.4"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
-// Create the working directory to run the server if it does not already exist.
-def serverRunDir = file("$projectDir/run")
-if (!serverRunDir.exists()) {
-    serverRunDir.mkdirs()
+tasks.named('test') {
+    useJUnitPlatform()
 }
 
-// Updates the manifest.json file with the latest properties defined in the
-// build.properties file. Currently we update the version and if packs are
-// included with the plugin.
-tasks.register('updatePluginManifest') {
-    def manifestFile = file('src/main/resources/manifest.json')
-    def pluginVersion = manifestVersion
-    doLast {
-        if (!manifestFile.exists()) {
-            throw new GradleException("Could not find manifest.json at ${manifestFile.path}!")
-        }
-        def manifestJson = new groovy.json.JsonSlurper().parseText(manifestFile.text)
-        manifestJson.Version = pluginVersion
-        manifestJson.IncludesAssetPack = includes_pack.toBoolean()
-        manifestJson.ServerVersion = server_version
-        manifestFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(manifestJson))
-    }
-}
-
-// Makes sure the plugin manifest is up to date.
+// Fill version fields of manifest.json at build time; the tracked file keeps placeholders.
 tasks.named('processResources') {
-    dependsOn 'updatePluginManifest'
-    dependsOn 'generateHudUiFiles'
-    from(tasks.named('generateHudUiFiles').map { it.outputs.files.singleFile })
-}
-
-tasks.named('sourcesJar') {
-    dependsOn 'generateHudUiFiles'
-    from(tasks.named('generateHudUiFiles').map { it.outputs.files.singleFile })
-}
-
-tasks.register('generateHudUiFiles') {
-    def outputDir = file("${buildDir}/generated-hud-ui")
-    outputs.dir(outputDir)
-    doLast {
-        // --- HUD files ---
-        def hudDir = new File(outputDir, 'Common/UI/Custom/AdvancedInfo/HUD/generated')
-        hudDir.mkdirs()
-        def bg = 'PatchStyle(TexturePath: "../../../Common/TooltipDefaultBackground.png", Border: 20)'
-        for (int fs = 8; fs <= 32; fs++) {
-            float scale      = fs / 18f
-            int captionSize   = Math.round(fs * 13f / 18f)
-            int sourceSize    = Math.round(fs * 12f / 18f)
-            int captionTopPad = (int) Math.max(0, (int)((fs - captionSize) / 2))
-            int overlayBarH  = fs + 6
-            int rowBottomPad = (int) Math.round(4 * scale)
-            int rowsVPad     = (int) Math.round(3 * scale)
-            int barHBelow    = (int) Math.max(1, Math.round(6 * scale))
-            int barHSpacer   = (int) Math.max(1, Math.round(6 * scale))
-            int minWCaption   = Math.round(50  * scale)
-            int minWTime      = Math.round(220 * scale)
-            int minWPosition  = Math.round(180 * scale)
-            int minWBiome     = Math.round(190 * scale)
-            int minWZone      = Math.round(120 * scale)
-            int minWWorldTime = Math.round(80  * scale)
-            int minWTarget    = Math.round(300 * scale)
-            String vStyle      = "LabelStyle(FontSize: ${fs})"
-            String captionStyle = "LabelStyle(FontSize: ${captionSize}, TextColor: #aaaaaa)"
-            String sStyle      = "LabelStyle(FontSize: ${sourceSize}, RenderBold: true, TextColor: #6699cc)"
-            String captionPad  = "Right: 6, Top: ${captionTopPad}"
-            def content = """\
-Group #AIHHud {
-  Padding: (Full: 10);
-  Group #AIHInner {
-    Group #AIHOffset {
-      Group #AIHContent {
-        Background: ${bg};
-        Padding: (Horizontal: 28, Vertical: 10);
-        Group #AIHRows {
-          LayoutMode: Top;
-          Padding: (Vertical: ${rowsVPad});
-          Group #AIHTopSpacer { Anchor: (Height: ${rowBottomPad}); }
-          Group #AIHTimeRow {
-            LayoutMode: Left;
-            Padding: (Bottom: ${rowBottomPad});
-            Label #AIHTimeCaption { Style: ${captionStyle}; Text: "Time"; Anchor: (MinWidth: ${minWCaption}); Padding: (${captionPad}); }
-            Label #AIHTimeText { Style: ${vStyle}; Anchor: (MinWidth: ${minWTime}); }
-          }
-          Group #AIHPositionRow {
-            LayoutMode: Left;
-            Padding: (Bottom: ${rowBottomPad});
-            Label #AIHPositionCaption { Style: ${captionStyle}; Text: "XYZ"; Anchor: (MinWidth: ${minWCaption}); Padding: (${captionPad}); }
-            Label #AIHPositionText { Style: ${vStyle}; Anchor: (MinWidth: ${minWPosition}); }
-          }
-          Group #AIHBiomeRow {
-            LayoutMode: Left;
-            Padding: (Bottom: ${rowBottomPad});
-            Label #AIHBiomeCaption { Style: ${captionStyle}; Text: "Biome"; Anchor: (MinWidth: ${minWCaption}); Padding: (${captionPad}); }
-            Label #AIHBiomeText { Style: ${vStyle}; Anchor: (MinWidth: ${minWBiome}); }
-          }
-          Group #AIHZoneRow {
-            LayoutMode: Left;
-            Padding: (Bottom: ${rowBottomPad});
-            Label #AIHZoneCaption { Style: ${captionStyle}; Text: " "; Anchor: (MinWidth: ${minWCaption}); Padding: (${captionPad}); }
-            Label #AIHZoneText { Style: ${vStyle}; Anchor: (MinWidth: ${minWZone}); }
-          }
-          Group #AIHWorldTimeRow {
-            LayoutMode: Left;
-            Label #AIHWorldTimeCaption { Style: ${captionStyle}; Text: "World"; Anchor: (MinWidth: ${minWCaption}); Padding: (${captionPad}); }
-            Label #AIHWorldTimeText { Style: ${vStyle}; Anchor: (MinWidth: ${minWWorldTime}); }
-          }
-          Group #AIHTargetRow {
-            LayoutMode: Left;
-            Padding: (Bottom: ${rowBottomPad});
-            Label #AIHTargetCaption { Style: ${captionStyle}; Text: "Target"; Anchor: (MinWidth: ${minWCaption}); Padding: (${captionPad}); }
-            Group #AIHTargetValueGroup {
-              LayoutMode: Top;
-              Anchor: (MinWidth: ${minWTarget});
-              Group #AIHTargetBarBelow {
-                LayoutMode: Top;
-                Label #AIHTargetTextBelow { Style: ${vStyle}; }
-                Group #AIHHealthBarBelow {
-                  LayoutMode: Left;
-                  Anchor: (Height: ${barHBelow}, Left: 0, Right: 0);
-                  Group #AIHHealthBarBelowFill { Background: (Color: #44aa44); }
-                  Group #AIHHealthBarBelowRemainder { Background: (Color: #333333); }
-                }
-                Label #AIHTargetSourceTextBelow { Style: ${sStyle}; }
-              }
-              Group #AIHTargetBarOverlay {
-                LayoutMode: Top;
-                Group #AIHHealthBarOverlay {
-                  LayoutMode: Left;
-                  Anchor: (Height: ${overlayBarH}, Left: 0, Right: 0);
-                  Group #AIHHealthBarOverlayFill { Background: (Color: #44aa44); }
-                  Group #AIHHealthBarOverlayRemainder { Background: (Color: #333333); }
-                }
-                Label #AIHTargetTextOverlay { Style: ${vStyle}; Anchor: (Top: -${overlayBarH}); Padding: (Left: 4); }
-                Label #AIHTargetSourceTextOverlay { Style: ${sStyle}; }
-              }
-              Group #AIHTargetBarNone {
-                LayoutMode: Top;
-                Label #AIHTargetTextNone { Style: ${vStyle}; }
-                Group #AIHTargetBarNoneSpacer { Anchor: (Height: ${barHSpacer}); }
-                Label #AIHTargetSourceTextNone { Style: ${sStyle}; }
-              }
-              Group #AIHTargetBarNoBar {
-                LayoutMode: Top;
-                Label #AIHTargetTextNoBar { Style: ${vStyle}; }
-                Label #AIHTargetSourceTextNoBar { Style: ${sStyle}; }
-              }
-            }
-          }
-        }
-      }
+    def manifestProps = [pluginVersion: manifestVersion, serverVersion: server_version]
+    inputs.properties(manifestProps)
+    filesMatching('manifest.json') {
+        expand(manifestProps)
     }
-  }
-}
-"""
-            new File(hudDir, "InfoHud_${fs}.ui").text = content
-        }
-        logger.lifecycle("Generated HUD .ui files for font sizes 8-32.")
-
-        // --- Settings page file ---
-        def pagesDir = new File(outputDir, 'Common/UI/Custom/AdvancedInfo/Pages')
-        pagesDir.mkdirs()
-        def ui = '''\
-$C = "../../Common.ui";
-
-@RowLabelStyle = LabelStyle(FontSize: 14, TextColor: #bfcdd5, VerticalAlignment: Center);
-@FieldLabelStyle = LabelStyle(FontSize: 14, TextColor: #96a9be, VerticalAlignment: Center);
-
-@CheckboxRow = Group {
-  LayoutMode: Left;
-  Anchor: (Height: 30);
-  Padding: (Vertical: 2);
-};
-
-@FieldRow = Group {
-  LayoutMode: Left;
-  Anchor: (Height: 34);
-  Padding: (Vertical: 3);
-};
-
-@SectionCard = Group {
-  LayoutMode: Top;
-  Padding: (Full: 10);
-  Background: #1a2533(0.6);
-  OutlineColor: #3a4a5a(0.5);
-  OutlineSize: 1;
-};
-
-@ButtonStyle = TextButtonStyle(
-  Default: (Background: $C.@DefaultSquareButtonDefaultBackground, LabelStyle: (FontSize: 13, TextColor: #bfcdd5, RenderBold: true, RenderUppercase: true, HorizontalAlignment: Center, VerticalAlignment: Center)),
-  Hovered: (Background: $C.@DefaultSquareButtonHoveredBackground, LabelStyle: (FontSize: 13, TextColor: #ffffff, RenderBold: true, RenderUppercase: true, HorizontalAlignment: Center, VerticalAlignment: Center)),
-  Pressed: (Background: $C.@DefaultSquareButtonPressedBackground, LabelStyle: (FontSize: 13, TextColor: #ffffff, RenderBold: true, RenderUppercase: true, HorizontalAlignment: Center, VerticalAlignment: Center)),
-  Sounds: $C.@ButtonSounds
-);
-
-$C.@PageOverlay {
-  $C.@DecoratedContainer {
-    Anchor: (Width: 520, Height: 660);
-
-    #Title {
-      $C.@Title { @Text = "Advanced Info Settings"; }
-      TextButton #CloseBtn {
-        Anchor: (Left: 12, Top: 4, Width: 64, Height: 24);
-        Padding: (Left: 8, Top: 2);
-        Text: "Close";
-        Style: TextButtonStyle(
-          Default: (LabelStyle: (FontSize: 14, TextColor: #93844c, RenderBold: true)),
-          Sounds: $C.@ButtonSounds
-        );
-        Background: #000000(0.13);
-      }
-    }
-
-    #Content {
-      FlexWeight: 1;
-      LayoutMode: TopScrolling;
-      ScrollbarStyle: $C.@DefaultScrollbarStyle;
-
-      Group {
-        LayoutMode: Top;
-        Padding: (Right: 8);
-
-        Group {
-          LayoutMode: Left;
-          Anchor: (Height: 30, Top: 4);
-          Background: #93844c(0.15);
-          Padding: (Left: 10);
-          Label { Text: "Visibility"; Style: (FontSize: 16, TextColor: #93844c, RenderBold: true); }
-        }
-        @SectionCard { Anchor: (Top: 6);
-          @CheckboxRow { $C.@CheckBox #ChkTime { }           Label { Text: "Time";                         Style: @RowLabelStyle; Anchor: (Left: 10); } }
-          @CheckboxRow { $C.@CheckBox #ChkBiome { }          Label { Text: "Biome";                        Style: @RowLabelStyle; Anchor: (Left: 10); } }
-          @CheckboxRow { $C.@CheckBox #ChkPosition { }       Label { Text: "Position (XYZ)";               Style: @RowLabelStyle; Anchor: (Left: 10); } }
-          @CheckboxRow { $C.@CheckBox #ChkWorldTime { }      Label { Text: "World Time";                   Style: @RowLabelStyle; Anchor: (Left: 10); } }
-          @CheckboxRow { $C.@CheckBox #ChkZone { }           Label { Text: "Zone / Tier";                  Style: @RowLabelStyle; Anchor: (Left: 10); } }
-          @CheckboxRow { $C.@CheckBox #ChkTarget { }         Label { Text: "Target";                       Style: @RowLabelStyle; Anchor: (Left: 10); } }
-          @CheckboxRow { $C.@CheckBox #ChkHealthBar { }      Label { Text: "Health Bar (requires Target)"; Style: @RowLabelStyle; Anchor: (Left: 10); } }
-          @CheckboxRow { $C.@CheckBox #ChkCaptions { }       Label { Text: "Captions";                     Style: @RowLabelStyle; Anchor: (Left: 10); } }
-          @CheckboxRow { $C.@CheckBox #ChkTimezoneOffset { } Label { Text: "Timezone Offset Label";        Style: @RowLabelStyle; Anchor: (Left: 10); } }
-        }
-
-        Group {
-          LayoutMode: Left;
-          Anchor: (Height: 30, Top: 12);
-          Background: #4c7a9c(0.15);
-          Padding: (Left: 10);
-          Label { Text: "Alignment"; Style: (FontSize: 16, TextColor: #4c7a9c, RenderBold: true); }
-        }
-        @SectionCard { Anchor: (Top: 6);
-          @FieldRow {
-            Label { Text: "Horizontal"; Style: @FieldLabelStyle; FlexWeight: 1; }
-            $C.@DropdownBox #DdHAlign { Anchor: (Width: 200, Height: 28); }
-          }
-          @FieldRow {
-            Label { Text: "Vertical"; Style: @FieldLabelStyle; FlexWeight: 1; }
-            $C.@DropdownBox #DdVAlign { Anchor: (Width: 200, Height: 28); }
-          }
-        }
-
-        Group {
-          LayoutMode: Left;
-          Anchor: (Height: 30, Top: 12);
-          Background: #5c8a5c(0.15);
-          Padding: (Left: 10);
-          Label { Text: "Time"; Style: (FontSize: 16, TextColor: #5c8a5c, RenderBold: true); }
-        }
-        @SectionCard { Anchor: (Top: 6);
-          @FieldRow {
-            Label { Text: "Format"; Style: @FieldLabelStyle; FlexWeight: 1; }
-            $C.@DropdownBox #DdTimeFormat { Anchor: (Width: 200, Height: 28); }
-          }
-          @FieldRow {
-            Label { Text: "Timezone"; Style: @FieldLabelStyle; FlexWeight: 1; }
-            $C.@DropdownBox #DdTimezone { Anchor: (Width: 220, Height: 28); }
-          }
-          Group { Anchor: (Top: 6);
-            Label { Text: "Or type a custom IANA timezone ID:"; Style: (FontSize: 13, TextColor: #96a9be, VerticalAlignment: Center); }
-          }
-          $C.@TextField #TfTimezone { Anchor: (Height: 28, Top: 4); }
-        }
-
-        Group {
-          LayoutMode: Left;
-          Anchor: (Height: 30, Top: 12);
-          Background: #9c4c4c(0.15);
-          Padding: (Left: 10);
-          Label { Text: "Target Health Bar"; Style: (FontSize: 16, TextColor: #9c4c4c, RenderBold: true); }
-        }
-        @SectionCard { Anchor: (Top: 6);
-          @FieldRow {
-            Label { Text: "Style"; Style: @FieldLabelStyle; FlexWeight: 1; }
-            $C.@DropdownBox #DdHealthBarStyle { Anchor: (Width: 200, Height: 28); }
-          }
-        }
-
-        Group {
-          LayoutMode: Left;
-          Anchor: (Height: 30, Top: 12);
-          Background: #7c4c9c(0.15);
-          Padding: (Left: 10);
-          Label { Text: "Display"; Style: (FontSize: 16, TextColor: #7c4c9c, RenderBold: true); }
-        }
-        @SectionCard { Anchor: (Top: 6);
-          @FieldRow {
-            Label { Text: "Font Size (8-32)"; Style: @FieldLabelStyle; FlexWeight: 1; }
-            $C.@NumberField #NfFontSize { Anchor: (Width: 120, Height: 28); }
-          }
-        }
-
-        Group {
-          LayoutMode: Left;
-          Anchor: (Height: 38, Top: 14, Bottom: 6);
-          TextButton #BtnSave  { FlexWeight: 1; Text: "SAVE";           Style: @ButtonStyle; }
-          Group { Anchor: (Width: 10); }
-          TextButton #BtnReset { FlexWeight: 1; Text: "RESET DEFAULTS"; Style: @ButtonStyle; }
-        }
-      }
-    }
-  }
 }
 
-$C.@BackButton {}
-'''
-        new File(pagesDir, 'SettingsPage.ui').text = ui
-        logger.lifecycle('Generated SettingsPage.ui.')
+// -------------------------------------------------------------------------
+// Local deployment.
+//
+// hytale_mods_dir (Gradle property or HYTALE_MODS_DIR env) is the mods folder
+// the jar is copied into: <server>/mods for a dedicated server or
+// <Hytale>/UserData/Mods for singleplayer.
+// -------------------------------------------------------------------------
+def resolveHytaleModsDir = {
+    def dir = System.getenv('HYTALE_MODS_DIR') ?: project.findProperty('hytale_mods_dir')
+    if (!dir) {
+        throw new GradleException("Set hytale_mods_dir in ~/.gradle/gradle.properties or the HYTALE_MODS_DIR environment variable.")
+    }
+    return file(dir)
+}
+
+tasks.register('deployToServer', Copy) {
+    group = 'hytale'
+    description = 'Copies the plugin jar into the configured Hytale mods folder (hytale_mods_dir).'
+    from(tasks.named('jar'))
+    into(provider { resolveHytaleModsDir() })
+    doFirst {
+        // Remove stale builds so the server never loads two versions of the plugin.
+        fileTree(dir: destinationDir, include: 'AdvancedInfo-*.jar').each { it.delete() }
     }
 }

@@ -1,7 +1,7 @@
 {
     "Group": "AdvancedInfo",
     "Name": "AdvancedInfo",
-    "Version": "1.0.0-dev.86012",
+    "Version": "${pluginVersion}",
     "Description": "Displays advanced information in the HUD.",
     "Authors": [
         {
@@ -9,12 +9,9 @@
         }
     ],
     "Website": "",
-    "ServerVersion": "2026.02.19-1a311a592",
+    "ServerVersion": "${serverVersion}",
     "Dependencies": {
         "Hytale:EntityModule": "*"
-    },
-    "OptionalDependencies": {
-        "Buuz135:MultipleHUD": ">=1.0.6"
     },
     "DisabledByDefault": false,
     "Main": "org.hlousek.hytale.plugin.advancedinfo.AdvancedInfo",

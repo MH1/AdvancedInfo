@@ -1,0 +1,10 @@
+Group #AIHud {
+  Padding: (Full: 10);
+  Group #AIInner {
+    Group #AIOffset {
+      Group #AIContent {
+        Background: (Color: #000000(0.6));
+      }
+    }
+  }
+}

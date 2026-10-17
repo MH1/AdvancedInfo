@@ -15,6 +15,7 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings;
+import org.hlousek.hytale.plugin.advancedinfo.ui.HudStyle;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings.HorizontalAlign;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings.ProgressBarStyle;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings.VerticalAlign;
@@ -42,6 +43,7 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
         addSubCommand(new StatusSubCommand(settingsComponentType));
         addSubCommand(new HealthBarSubCommand(settingsComponentType));
         addSubCommand(new FontSubCommand(settingsComponentType));
+        addSubCommand(new OpacitySubCommand(settingsComponentType));
         addSubCommand(new UiSubCommand(settingsComponentType));
     }
 
@@ -427,6 +429,7 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
             sb.append("\n  timezone: ").append(settings.getTimezone().getId());
             sb.append("\n  healthbar: ").append(settings.getHealthBarStyle().name().toLowerCase());
             sb.append("\n  font size: ").append(settings.getFontSize());
+            sb.append("\n  background opacity: ").append(settings.getBackgroundOpacity()).append("%");
             playerRef.sendMessage(Message.raw(sb.toString()));
         }
     }
@@ -480,8 +483,8 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
 
     private static class FontSubCommand extends AbstractPlayerCommand {
 
-        private static final int MIN_SIZE = 8;
-        private static final int MAX_SIZE = 32;
+        private static final int MIN_SIZE = HudStyle.MIN_FONT_SIZE;
+        private static final int MAX_SIZE = HudStyle.MAX_FONT_SIZE;
 
         private final ComponentType<EntityStore, PlayerHudSettings> type;
         private final RequiredArg<String> sizeArg;
@@ -518,6 +521,53 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
             }
             getSettings(store, ref, type).setFontSize(size);
             playerRef.sendMessage(Message.raw("Font size set to " + size + "."));
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // /ai opacity <percent>
+    // -------------------------------------------------------------------------
+
+    private static class OpacitySubCommand extends AbstractPlayerCommand {
+
+        private static final int MIN = HudStyle.MIN_OPACITY;
+        private static final int MAX = HudStyle.MAX_OPACITY;
+
+        private final ComponentType<EntityStore, PlayerHudSettings> type;
+        private final RequiredArg<String> percentArg;
+
+        public OpacitySubCommand(@Nonnull ComponentType<EntityStore, PlayerHudSettings> type) {
+            super("opacity", "Set the panel background opacity in percent (" + MIN + "-" + MAX + ").");
+            this.type = type;
+            this.percentArg = withRequiredArg(
+                "percent", "Background opacity",
+                new SingleArgumentType<String>("Opacity", "Integer between " + MIN + " and " + MAX, String.valueOf(HudStyle.DEFAULT_OPACITY)) {
+                    @Override public String parse(String input, ParseResult parseResult) { return input; }
+                }
+            );
+        }
+
+        @Override
+        protected void execute(
+            @Nonnull CommandContext ctx,
+            @Nonnull Store<EntityStore> store,
+            @Nonnull Ref<EntityStore> ref,
+            @Nonnull PlayerRef playerRef,
+            @Nonnull World world
+        ) {
+            int percent;
+            try {
+                percent = Integer.parseInt(percentArg.get(ctx).replace("%", ""));
+            } catch (NumberFormatException e) {
+                playerRef.sendMessage(Message.raw("Invalid opacity. Use a number between " + MIN + " and " + MAX + "."));
+                return;
+            }
+            if (percent < MIN || percent > MAX) {
+                playerRef.sendMessage(Message.raw("Opacity must be between " + MIN + " and " + MAX + "."));
+                return;
+            }
+            getSettings(store, ref, type).setBackgroundOpacity(percent);
+            playerRef.sendMessage(Message.raw("Background opacity set to " + percent + "%."));
         }
     }
 

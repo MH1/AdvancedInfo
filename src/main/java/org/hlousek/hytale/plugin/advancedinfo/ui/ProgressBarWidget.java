@@ -29,25 +29,25 @@ public class ProgressBarWidget {
     // -------------------------------------------------------------------------
     // UI selector prefixes - must match the groups in the .ui file exactly.
     // -------------------------------------------------------------------------
-    private static final String GRP_BELOW   = "#AIHTargetBarBelow";
-    private static final String GRP_OVERLAY = "#AIHTargetBarOverlay";
-    private static final String GRP_NONE    = "#AIHTargetBarNone";
-    private static final String GRP_NO_BAR  = "#AIHTargetBarNoBar";
+    private static final String GRP_BELOW   = "#AITargetBarBelow";
+    private static final String GRP_OVERLAY = "#AITargetBarOverlay";
+    private static final String GRP_NONE    = "#AITargetBarNone";
+    private static final String GRP_NO_BAR  = "#AITargetBarNoBar";
 
-    private static final String LBL_FIRST_BELOW   = "#AIHTargetTextBelow";
-    private static final String LBL_FIRST_OVERLAY = "#AIHTargetTextOverlay";
-    private static final String LBL_FIRST_NONE    = "#AIHTargetTextNone";
-    private static final String LBL_FIRST_NO_BAR  = "#AIHTargetTextNoBar";
+    private static final String LBL_FIRST_BELOW   = "#AITargetTextBelow";
+    private static final String LBL_FIRST_OVERLAY = "#AITargetTextOverlay";
+    private static final String LBL_FIRST_NONE    = "#AITargetTextNone";
+    private static final String LBL_FIRST_NO_BAR  = "#AITargetTextNoBar";
 
-    private static final String LBL_SECOND_BELOW   = "#AIHTargetSourceTextBelow";
-    private static final String LBL_SECOND_OVERLAY = "#AIHTargetSourceTextOverlay";
-    private static final String LBL_SECOND_NONE    = "#AIHTargetSourceTextNone";
-    private static final String LBL_SECOND_NO_BAR  = "#AIHTargetSourceTextNoBar";
+    private static final String LBL_SECOND_BELOW   = "#AITargetSourceTextBelow";
+    private static final String LBL_SECOND_OVERLAY = "#AITargetSourceTextOverlay";
+    private static final String LBL_SECOND_NONE    = "#AITargetSourceTextNone";
+    private static final String LBL_SECOND_NO_BAR  = "#AITargetSourceTextNoBar";
 
-    private static final String BAR_FILL_BELOW        = "#AIHHealthBarBelowFill";
-    private static final String BAR_REMAINDER_BELOW   = "#AIHHealthBarBelowRemainder";
-    private static final String BAR_FILL_OVERLAY      = "#AIHHealthBarOverlayFill";
-    private static final String BAR_REMAINDER_OVERLAY = "#AIHHealthBarOverlayRemainder";
+    private static final String BAR_FILL_BELOW        = "#AIHealthBarBelowFill";
+    private static final String BAR_REMAINDER_BELOW   = "#AIHealthBarBelowRemainder";
+    private static final String BAR_FILL_OVERLAY      = "#AIHealthBarOverlayFill";
+    private static final String BAR_REMAINDER_OVERLAY = "#AIHealthBarOverlayRemainder";
 
     // -------------------------------------------------------------------------
     // Public properties

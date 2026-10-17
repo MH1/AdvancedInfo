@@ -10,7 +10,7 @@ import java.time.ZoneId;
 
 public class PlayerHudSettings implements Component<EntityStore> {
 
-    private static final String CURRENT_VERSION = "1.0.1";
+    private static final String CURRENT_VERSION = "1.0.2";
 
     public enum HorizontalAlign { LEFT, CENTER, RIGHT }
     public enum VerticalAlign   { TOP, BOTTOM }
@@ -25,7 +25,7 @@ public class PlayerHudSettings implements Component<EntityStore> {
     private boolean positionEnabled = true;
     @Since(version = "1.0.0", defaultValue = "true")
     private boolean worldTimeEnabled = true;
-    @Since(version = "1.0.0", defaultValue = "false")
+    @Since(version = "1.0.0", defaultValue = "true")
     private boolean zoneEnabled = true;
     @Since(version = "1.0.0", defaultValue = "true")
     private boolean time24h = true;
@@ -47,6 +47,8 @@ public class PlayerHudSettings implements Component<EntityStore> {
     private int fontSize = 18;
     @Since(version = "1.0.1", defaultValue = "true")
     private boolean captionsEnabled = true;
+    @Since(version = "1.0.2", defaultValue = "60")
+    private int backgroundOpacity = 60;
 
     public PlayerHudSettings() {}
 
@@ -81,12 +83,16 @@ public class PlayerHudSettings implements Component<EntityStore> {
     public void setHealthBarEnabled(boolean v)  { this.healthBarEnabled = v; }
 
     public ProgressBarStyle getHealthBarStyle() {
-        try { return ProgressBarStyle.valueOf(healthBarStyle); } catch (Exception e) { return ProgressBarStyle.BELOW; }
+        try { return ProgressBarStyle.valueOf(healthBarStyle); } catch (Exception e) { return ProgressBarStyle.OVERLAY; }
     }
     public void setHealthBarStyle(ProgressBarStyle v) { this.healthBarStyle = v.name(); }
 
     public int getFontSize()              { return fontSize; }
     public void setFontSize(int v)        { this.fontSize = v; }
+
+    /** Panel background opacity in percent (0-100). */
+    public int getBackgroundOpacity()         { return backgroundOpacity; }
+    public void setBackgroundOpacity(int v)   { this.backgroundOpacity = v; }
 
     public boolean isCaptionsEnabled()            { return captionsEnabled; }
     public void setCaptionsEnabled(boolean v)     { this.captionsEnabled = v; }
@@ -130,6 +136,7 @@ public class PlayerHudSettings implements Component<EntityStore> {
         copy.healthBarStyle        = this.healthBarStyle;
         copy.fontSize              = this.fontSize;
         copy.captionsEnabled       = this.captionsEnabled;
+        copy.backgroundOpacity     = this.backgroundOpacity;
         copy.time24h               = this.time24h;
         copy.timezone              = this.timezone;
         copy.timezoneOffsetVisible = this.timezoneOffsetVisible;
@@ -162,6 +169,8 @@ public class PlayerHudSettings implements Component<EntityStore> {
                 (c, v) -> c.fontSize = v, c -> c.fontSize).add()
             .append(new KeyedCodec<>("CaptionsEnabled",      Codec.BOOLEAN),
                 (c, v) -> c.captionsEnabled = v, c -> c.captionsEnabled).add()
+            .append(new KeyedCodec<>("BackgroundOpacity",    Codec.INTEGER),
+                (c, v) -> c.backgroundOpacity = v, c -> c.backgroundOpacity).add()
             .append(new KeyedCodec<>("Time24h",              Codec.BOOLEAN),
                 (c, v) -> c.time24h = v, c -> c.time24h).add()
             .append(new KeyedCodec<>("Timezone",             Codec.STRING),

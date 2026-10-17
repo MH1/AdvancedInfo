@@ -22,6 +22,5 @@ public record HudContent(
     @Nonnull ProgressBarStyle healthBarStyle,
     @Nonnull HorizontalAlign horizontalAlign,
     @Nonnull VerticalAlign verticalAlign,
-    int fontSize,
-    int barWidth
+    @Nonnull HudStyle style
 ) {}

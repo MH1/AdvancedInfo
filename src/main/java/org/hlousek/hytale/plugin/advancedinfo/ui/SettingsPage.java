@@ -117,8 +117,9 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
         ui.set("#DdHealthBarStyle.Entries", alignEntries("Overlay", "Below"));
         ui.set("#DdHealthBarStyle.Value",   s.getHealthBarStyle() == ProgressBarStyle.OVERLAY ? "Overlay" : "Below");
 
-        // Font size number field
-        ui.set("#NfFontSize.Value", s.getFontSize());
+        // Display sliders
+        ui.set("#SlFontSize.Value", s.getFontSize());
+        ui.set("#SlOpacity.Value",  s.getBackgroundOpacity());
     }
 
     private static List<DropdownEntryInfo> alignEntries(String... values) {
@@ -149,7 +150,8 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
         bindString(events, "#DdTimezone",        "set_timezone_dropdown");
         bindString(events, "#DdHealthBarStyle",  "set_healthbar_style");
         bindString(events, "#TfTimezone",        "set_timezone_text");
-        bindNum   (events, "#NfFontSize",        "set_font_size");
+        bindNum   (events, "#SlFontSize",        "set_font_size");
+        bindNum   (events, "#SlOpacity",         "set_opacity");
         bindClick (events, "#BtnSave",           "save");
         bindClick (events, "#BtnReset",          "reset");
         bindClick (events, "#CloseBtn",          "close");
@@ -237,7 +239,13 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
             case "set_font_size" -> {
                 try {
                     int size = (int) Double.parseDouble(val);
-                    if (size >= 8 && size <= 32) settings.setFontSize(size);
+                    if (size >= HudStyle.MIN_FONT_SIZE && size <= HudStyle.MAX_FONT_SIZE) settings.setFontSize(size);
+                } catch (NumberFormatException ignored) {}
+            }
+            case "set_opacity" -> {
+                try {
+                    int percent = (int) Double.parseDouble(val);
+                    if (percent >= HudStyle.MIN_OPACITY && percent <= HudStyle.MAX_OPACITY) settings.setBackgroundOpacity(percent);
                 } catch (NumberFormatException ignored) {}
             }
             case "save" -> {

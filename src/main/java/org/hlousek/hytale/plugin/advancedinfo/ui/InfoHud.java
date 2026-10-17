@@ -2,6 +2,7 @@ package org.hlousek.hytale.plugin.advancedinfo.ui;
 
 import com.hypixel.hytale.server.core.entity.entities.player.hud.CustomUIHud;
 import com.hypixel.hytale.server.core.ui.Anchor;
+import com.hypixel.hytale.server.core.ui.PatchStyle;
 import com.hypixel.hytale.server.core.ui.Value;
 import com.hypixel.hytale.server.core.ui.builder.UICommandBuilder;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
@@ -13,7 +14,11 @@ import javax.annotation.Nullable;
 
 public class InfoHud extends CustomUIHud {
 
-    private static final String UI_PATH_TEMPLATE = "AdvancedInfo/HUD/generated/InfoHud_%d.ui";
+    /** Key under which the panel is registered in the player's HudManager. */
+    public static final String KEY = "AdvancedInfo:Info";
+
+    private static final String UI_PATH      = "AdvancedInfo/HUD/InfoHud.ui";
+    private static final String CONTENT_SLOT = "#AIContent";
 
     @Nullable private String timeText;
     @Nullable private String biomeText;
@@ -29,15 +34,17 @@ public class InfoHud extends CustomUIHud {
     private final ProgressBarWidget targetBar = new ProgressBarWidget();
 
     private boolean isBuilt = false;
-    private int fontSize = 18;
+    @Nonnull  private HudStyle style = HudStyle.DEFAULT;
+    @Nullable private HudStyle renderedStyle;
 
     public InfoHud(@Nonnull PlayerRef playerRef) {
-        super(playerRef);
+        super(playerRef, KEY);
     }
 
     @Override
     protected void build(@Nonnull UICommandBuilder ui) {
-        ui.append(String.format(UI_PATH_TEMPLATE, fontSize));
+        ui.append(UI_PATH);
+        renderContent(ui);
         isBuilt = true;
         _update(ui);
     }
@@ -45,40 +52,61 @@ public class InfoHud extends CustomUIHud {
     public void update() {
         if (!isBuilt) { return; }
         UICommandBuilder ui = new UICommandBuilder();
+        if (!style.equals(renderedStyle)) {
+            renderContent(ui);
+        }
         _update(ui);
         update(false, ui);
     }
 
-    public void clear() {
-        this.update(true, new UICommandBuilder());
+    @Override
+    protected void onRemove() {
         isBuilt = false;
+        renderedStyle = null;
+    }
+
+    /**
+     * (Re)creates the panel content and background for the current style inside the
+     * static skeleton. Only the content slot is touched, so the HUD itself is never torn down.
+     */
+    private void renderContent(@Nonnull UICommandBuilder ui) {
+        if (renderedStyle != null) {
+            ui.clear(CONTENT_SLOT);
+        }
+        ui.appendInline(CONTENT_SLOT, InfoHudMarkup.render(style));
+
+        PatchStyle background = new PatchStyle();
+        background.setColor(Value.of(style.backgroundColor()));
+        ui.setObject(CONTENT_SLOT + ".Background", background);
+
+        renderedStyle = style;
     }
 
     private void _update(@Nonnull UICommandBuilder ui) {
-        ui.set("#AIHTimeText.Text",      timeText      != null ? timeText      : "");
-        ui.set("#AIHBiomeText.Text",     biomeText     != null ? biomeText     : "");
-        ui.set("#AIHZoneText.Text",      zoneText      != null ? zoneText      : "");
-        ui.set("#AIHPositionText.Text",  positionText  != null ? positionText  : "");
-        ui.set("#AIHWorldTimeText.Text", worldTimeText != null ? worldTimeText : "");
+        ui.set("#AITimeText.Text",      timeText      != null ? timeText      : "");
+        ui.set("#AIBiomeText.Text",     biomeText     != null ? biomeText     : "");
+        ui.set("#AIZoneText.Text",      zoneText      != null ? zoneText      : "");
+        ui.set("#AIPositionText.Text",  positionText  != null ? positionText  : "");
+        ui.set("#AIWorldTimeText.Text", worldTimeText != null ? worldTimeText : "");
 
-        ui.set("#AIHTimeRow.Visible",      timeText      != null);
-        ui.set("#AIHPositionRow.Visible",  positionText  != null);
-        ui.set("#AIHBiomeRow.Visible",     biomeText     != null);
-        ui.set("#AIHZoneRow.Visible",      zoneText      != null);
-        ui.set("#AIHWorldTimeRow.Visible", worldTimeText != null);
-        ui.set("#AIHTargetRow.Visible",    targetEnabled);
+        ui.set("#AITimeRow.Visible",      timeText      != null);
+        ui.set("#AIPositionRow.Visible",  positionText  != null);
+        ui.set("#AIBiomeRow.Visible",     biomeText     != null);
+        ui.set("#AIZoneRow.Visible",      zoneText      != null);
+        ui.set("#AIWorldTimeRow.Visible", worldTimeText != null);
+        ui.set("#AITargetRow.Visible",    targetEnabled);
 
-        ui.set("#AIHTimeCaption.Visible",      captionsEnabled);
-        ui.set("#AIHPositionCaption.Visible",  captionsEnabled);
-        ui.set("#AIHBiomeCaption.Visible",     captionsEnabled);
-        ui.set("#AIHZoneCaption.Visible",      captionsEnabled);
-        ui.set("#AIHWorldTimeCaption.Visible", captionsEnabled);
-        ui.set("#AIHTargetCaption.Visible",    captionsEnabled);
+        ui.set("#AITimeCaption.Visible",      captionsEnabled);
+        ui.set("#AIPositionCaption.Visible",  captionsEnabled);
+        ui.set("#AIBiomeCaption.Visible",     captionsEnabled);
+        ui.set("#AIZoneCaption.Visible",      captionsEnabled);
+        ui.set("#AIWorldTimeCaption.Visible", captionsEnabled);
+        ui.set("#AITargetCaption.Visible",    captionsEnabled);
 
         targetBar.apply(ui);
 
-        ui.set("#AIHHud.LayoutMode", verticalAlign == VerticalAlign.BOTTOM ? "Bottom" : "Top");
-        ui.set("#AIHInner.LayoutMode", switch (horizontalAlign) {
+        ui.set("#AIHud.LayoutMode", verticalAlign == VerticalAlign.BOTTOM ? "Bottom" : "Top");
+        ui.set("#AIInner.LayoutMode", switch (horizontalAlign) {
             case LEFT   -> "Left";
             case CENTER -> "Center";
             case RIGHT  -> "Right";
@@ -88,7 +116,7 @@ public class InfoHud extends CustomUIHud {
         if (verticalAlign == VerticalAlign.BOTTOM) {
             offset.setBottom(Value.of(130));
         }
-        ui.setObject("#AIHOffset.Anchor", offset);
+        ui.setObject("#AIOffset.Anchor", offset);
     }
 
     public void applyContent(@Nonnull HudContent content) {
@@ -102,14 +130,14 @@ public class InfoHud extends CustomUIHud {
         this.captionsEnabled  = content.captionsEnabled();
         this.horizontalAlign  = content.horizontalAlign();
         this.verticalAlign    = content.verticalAlign();
-        this.fontSize         = content.fontSize();
+        this.style            = content.style();
 
         targetBar.setFirstLine(content.targetText());
         targetBar.setSecondLine(content.targetSourceText());
         targetBar.setMode(content.healthBarStyle());
         targetBar.setBarVisible(content.healthBarEnabled());
         targetBar.setProgress(content.targetHealthPct());
-        targetBar.setWidth(content.barWidth());
+        targetBar.setWidth(content.style().targetWidth());
     }
 
     public void setTimeText(@Nullable String timeText)           { this.timeText = timeText; }
@@ -128,7 +156,7 @@ public class InfoHud extends CustomUIHud {
     public boolean isTargetEnabled()           { return targetEnabled; }
     public boolean isCaptionsEnabled()         { return captionsEnabled; }
     public float   getTargetHealthPct()        { return targetHealthPct; }
-    public int     getFontSize()               { return fontSize; }
+    @Nonnull public HudStyle getStyle()        { return style; }
     @Nonnull public HorizontalAlign getHorizontalAlign() { return horizontalAlign; }
     @Nonnull public VerticalAlign   getVerticalAlign()   { return verticalAlign; }
 

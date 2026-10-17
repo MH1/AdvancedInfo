@@ -1,6 +1,5 @@
 package org.hlousek.hytale.plugin.advancedinfo.ui;
 
-import com.buuz135.mhud.MultipleHUD;
 import com.hypixel.hytale.server.core.entity.entities.Player;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 
@@ -12,16 +11,23 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class InfoManager {
 
-    private static final String HUD_ID = "AdvancedInfo_Info";
+    /** Minimum time between two panel refreshes for one player. */
+    public static final float UPDATE_INTERVAL_SECONDS = 0.2f;
 
     private final ConcurrentHashMap<UUID, InfoHud> huds = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, float[]> updateAccumulators = new ConcurrentHashMap<>();
     private final Set<UUID> mapVisible   = ConcurrentHashMap.newKeySet();
     private final Set<UUID> hudHidden    = ConcurrentHashMap.newKeySet();
 
-    private boolean isMultipleHUDPresent = false;
+    @Nonnull private volatile HudBackend backend = new NativeHudBackend();
 
-    public void setMultipleHUDPresent(boolean multipleHUDPresent) {
-        isMultipleHUDPresent = multipleHUDPresent;
+    public void setBackend(@Nonnull HudBackend backend) {
+        this.backend = backend;
+    }
+
+    @Nonnull
+    public HudBackend getBackend() {
+        return backend;
     }
 
     public void onMapVisibilityChanged(@Nonnull UUID uuid, boolean visible) {
@@ -37,6 +43,18 @@ public class InfoManager {
     }
 
     /**
+     * Accumulates {@code dt} (seconds) for the player and returns true once
+     * {@link #UPDATE_INTERVAL_SECONDS} has elapsed since the last accepted update.
+     */
+    public boolean shouldUpdate(@Nonnull UUID uuid, float dt) {
+        float[] acc = updateAccumulators.computeIfAbsent(uuid, k -> new float[] { UPDATE_INTERVAL_SECONDS });
+        acc[0] += dt;
+        if (acc[0] < UPDATE_INTERVAL_SECONDS) { return false; }
+        acc[0] = 0f;
+        return true;
+    }
+
+    /**
      * Update the unified HUD panel. Pass null for a field to hide that row,
      * or call {@link #hideHud} when all sections are disabled.
      */
@@ -47,30 +65,13 @@ public class InfoManager {
     ) {
         UUID uuid = playerRef.getUuid();
 
-        boolean isNew = !huds.containsKey(uuid);
         InfoHud hud = huds.get(uuid);
 
-        // If font size changed on an existing HUD, tear it down so build() is called fresh.
-        if (!isNew && hud != null && hud.getFontSize() != content.fontSize()) {
-            huds.remove(uuid);
-            if (isMultipleHUDPresent) {
-                MultipleHUD.getInstance().hideCustomHud(player, HUD_ID);
-            } else {
-                hud.clear();
-            }
-            isNew = true;
-            hud = null;
-        }
-
-        if (isNew) {
+        if (hud == null) {
             hud = new InfoHud(playerRef);
             huds.put(uuid, hud);
             hud.applyContent(content);
-            if (isMultipleHUDPresent) {
-                MultipleHUD.getInstance().setCustomHud(player, playerRef, HUD_ID, hud);
-            } else {
-                player.getHudManager().setCustomHud(playerRef, hud);
-            }
+            backend.show(player, playerRef, hud);
             return;
         }
 
@@ -87,7 +88,8 @@ public class InfoManager {
             && hud.getTargetBar().isBarVisible()   == content.healthBarEnabled()
             && hud.getTargetBar().getMode()        == content.healthBarStyle()
             && hud.getHorizontalAlign()            == content.horizontalAlign()
-            && hud.getVerticalAlign()              == content.verticalAlign()) {
+            && hud.getVerticalAlign()              == content.verticalAlign()
+            && hud.getStyle().equals(content.style())) {
             return;
         }
 
@@ -99,16 +101,13 @@ public class InfoManager {
         UUID uuid = playerRef.getUuid();
         if (!huds.containsKey(uuid)) { return; }
         InfoHud hud = huds.remove(uuid);
-        if (isMultipleHUDPresent) {
-            MultipleHUD.getInstance().hideCustomHud(player, HUD_ID);
-        } else {
-            hud.clear();
-        }
+        backend.hide(player, playerRef, hud);
     }
 
     public void onPlayerLeave(@Nonnull PlayerRef playerRef) {
         UUID uuid = playerRef.getUuid();
         huds.remove(uuid);
+        updateAccumulators.remove(uuid);
         mapVisible.remove(uuid);
         hudHidden.remove(uuid);
     }
