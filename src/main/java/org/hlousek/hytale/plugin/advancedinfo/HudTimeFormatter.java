@@ -1,6 +1,10 @@
 package org.hlousek.hytale.plugin.advancedinfo;
 
+import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings.WorldDayFormat;
+
 import javax.annotation.Nonnull;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -24,10 +28,26 @@ public final class HudTimeFormatter {
         return time + " [" + offsetLabel + "]";
     }
 
+    /**
+     * Formats the in-game time with an optional day prefix.
+     *
+     * @param gameDateTime calendar view of the game time (day of year, time of day)
+     * @param gameTime     absolute game time
+     * @param epoch        start of the game calendar (year zero); total days are counted from here
+     */
     @Nonnull
-    public static String worldTime(@Nonnull LocalDateTime gameDateTime, boolean use24h) {
-        int day = gameDateTime.getDayOfYear();
+    public static String worldTime(
+        @Nonnull LocalDateTime gameDateTime,
+        @Nonnull Instant gameTime,
+        @Nonnull Instant epoch,
+        @Nonnull WorldDayFormat dayFormat,
+        boolean use24h
+    ) {
         String timeOfDay = gameDateTime.format(use24h ? FORMATTER_SHORT_24H : FORMATTER_SHORT_12H);
-        return "Day " + day + ", " + timeOfDay;
+        return switch (dayFormat) {
+            case NONE        -> timeOfDay;
+            case DAY_OF_YEAR -> "Day " + gameDateTime.getDayOfYear() + ", " + timeOfDay;
+            case TOTAL_DAYS  -> "Day " + (Duration.between(epoch, gameTime).toDays() + 1) + ", " + timeOfDay;
+        };
     }
 }

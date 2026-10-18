@@ -149,3 +149,42 @@ tasks.register('deployToServer', Copy) {
         fileTree(dir: destinationDir, include: 'AdvancedInfo-*.jar').each { it.delete() }
     }
 }
+
+// -------------------------------------------------------------------------
+// CurseForge project description.
+//
+// Derived from README.md so the two never drift apart: relative links and
+// images are rewritten to absolute GitHub URLs, the "Building" section is
+// dropped (irrelevant for players) and a project-page footer is added.
+// Output: build/curseforge/description.md - paste it into the CurseForge
+// project description editor (Markdown mode).
+// -------------------------------------------------------------------------
+tasks.register('curseforgeDescription') {
+    group = 'hytale'
+    description = 'Generates the CurseForge project description from README.md.'
+    def readme = file('README.md')
+    def output = layout.buildDirectory.file('curseforge/description.md')
+    def repoUrl = project.findProperty('github_repo_url') ?: 'https://github.com/MH1/AdvancedInfo'
+    inputs.file(readme)
+    inputs.property('repoUrl', repoUrl)
+    outputs.file(output)
+    doLast {
+        def rawBase  = "${repoUrl}/raw/main/"
+        def blobBase = "${repoUrl}/blob/main/"
+        def text = readme.text
+
+        // Drop the "## Building" section (up to the next level-2 heading).
+        text = text.replaceAll(/(?s)\n## Building\n.*?(?=\n## )/, '')
+
+        // Images -> raw.githubusercontent-style URLs, other relative links -> blob URLs.
+        text = text.replaceAll(/!\[([^\]]*)\]\((?!https?:\/\/)([^)]+)\)/) { all, alt, path -> "![${alt}](${rawBase}${path})" }
+        text = text.replaceAll(/(?<!!)\[([^\]]*)\]\((?!https?:\/\/|#)([^)]+)\)/) { all, label, path -> "[${label}](${blobBase}${path})" }
+
+        text = text.trim() + "\n\n## Project page\n\nSource code and issue tracker: [${repoUrl}](${repoUrl})\n"
+
+        def out = output.get().asFile
+        out.parentFile.mkdirs()
+        out.text = text
+        logger.lifecycle("CurseForge description written to ${out}")
+    }
+}

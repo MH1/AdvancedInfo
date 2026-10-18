@@ -1,5 +1,6 @@
 package org.hlousek.hytale.plugin.advancedinfo.command;
 
+import com.hypixel.hytale.server.core.universe.PlayerRef;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings;
 
 import javax.annotation.Nonnull;
@@ -17,6 +18,7 @@ public class HudToggleEntry {
     @Nullable private final Predicate<PlayerHudSettings> guard;
     @Nullable private final String guardMessage;
     private final boolean excludeFromAll;
+    @Nullable private final String permission;
 
     public HudToggleEntry(
         @Nonnull String name,
@@ -25,7 +27,7 @@ public class HudToggleEntry {
         @Nonnull Consumer<PlayerHudSettings> disableAction,
         @Nonnull Predicate<PlayerHudSettings> visibilityGetter
     ) {
-        this(name, description, enableAction, disableAction, visibilityGetter, null, null, false);
+        this(name, description, enableAction, disableAction, visibilityGetter, null, null, false, null);
     }
 
     public HudToggleEntry(
@@ -37,7 +39,7 @@ public class HudToggleEntry {
         @Nullable Predicate<PlayerHudSettings> guard,
         @Nullable String guardMessage
     ) {
-        this(name, description, enableAction, disableAction, visibilityGetter, guard, guardMessage, false);
+        this(name, description, enableAction, disableAction, visibilityGetter, guard, guardMessage, false, null);
     }
 
     public HudToggleEntry(
@@ -48,7 +50,8 @@ public class HudToggleEntry {
         @Nonnull Predicate<PlayerHudSettings> visibilityGetter,
         @Nullable Predicate<PlayerHudSettings> guard,
         @Nullable String guardMessage,
-        boolean excludeFromAll
+        boolean excludeFromAll,
+        @Nullable String permission
     ) {
         this.name             = name;
         this.description      = description;
@@ -58,6 +61,7 @@ public class HudToggleEntry {
         this.guard            = guard;
         this.guardMessage     = guardMessage;
         this.excludeFromAll   = excludeFromAll;
+        this.permission       = permission;
     }
 
     @Nonnull  public String getName()        { return name; }
@@ -75,5 +79,7 @@ public class HudToggleEntry {
     public void enable(@Nonnull PlayerHudSettings settings)  { enableAction.accept(settings); }
     public void disable(@Nonnull PlayerHudSettings settings) { disableAction.accept(settings); }
     public boolean isExcludedFromAll() { return excludeFromAll; }
+    /** False when the server denies the player the permission this element needs. */
+    public boolean isPermitted(@Nonnull PlayerRef playerRef) { return permission == null || playerRef.hasPermission(permission); }
     public boolean isVisible(@Nonnull PlayerHudSettings settings) { return visibilityGetter.test(settings); }
 }

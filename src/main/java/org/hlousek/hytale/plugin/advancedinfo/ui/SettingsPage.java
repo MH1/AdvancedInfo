@@ -1,5 +1,6 @@
 package org.hlousek.hytale.plugin.advancedinfo.ui;
 
+import org.hlousek.hytale.plugin.advancedinfo.AdvancedInfoPermissions;
 import com.hypixel.hytale.codec.Codec;
 import com.hypixel.hytale.codec.KeyedCodec;
 import com.hypixel.hytale.codec.builder.BuilderCodec;
@@ -20,6 +21,7 @@ import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings.HorizontalAlign;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings.ProgressBarStyle;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings.VerticalAlign;
+import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings.WorldDayFormat;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -75,11 +77,16 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
         ui.append(UI_PATH);
 
         PlayerHudSettings s = getOrCreateSettings(ref, store);
-        applyState(ui, s);
+        applyState(ui, s, playerRef.hasPermission(AdvancedInfoPermissions.HEALTH));
         bindEvents(events);
     }
 
-    private static void applyState(@Nonnull UICommandBuilder ui, @Nonnull PlayerHudSettings s) {
+    private static void applyState(@Nonnull UICommandBuilder ui, @Nonnull PlayerHudSettings s, boolean healthVisible) {
+        // Hide what the server does not allow instead of offering a setting without effect.
+        ui.set("#RowHealthBar.Visible",      healthVisible);
+        ui.set("#HealthBarHeader.Visible",   healthVisible);
+        ui.set("#HealthBarSection.Visible",  healthVisible);
+
         // Checkboxes - use .Value, not .Checked
         ui.set("#ChkTime.Value",           s.isTimeEnabled());
         ui.set("#ChkBiome.Value",          s.isBiomeEnabled());
@@ -100,6 +107,10 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
         // Time format dropdown
         ui.set("#DdTimeFormat.Entries", alignEntries("24h", "12h"));
         ui.set("#DdTimeFormat.Value",   s.isTime24h() ? "24h" : "12h");
+
+        // World day dropdown
+        ui.set("#DdWorldDay.Entries", dayFormatEntries());
+        ui.set("#DdWorldDay.Value",   s.getWorldDayFormat().name());
 
         // Timezone dropdown
         List<DropdownEntryInfo> tzEntries = new ArrayList<>();
@@ -130,6 +141,14 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
         return entries;
     }
 
+    private static List<DropdownEntryInfo> dayFormatEntries() {
+        return List.of(
+            new DropdownEntryInfo(LocalizableString.fromString("Hidden"),            WorldDayFormat.NONE.name()),
+            new DropdownEntryInfo(LocalizableString.fromString("Day of the year"),   WorldDayFormat.DAY_OF_YEAR.name()),
+            new DropdownEntryInfo(LocalizableString.fromString("Total days"),        WorldDayFormat.TOTAL_DAYS.name())
+        );
+    }
+
     // -------------------------------------------------------------------------
     // Event bindings
     // -------------------------------------------------------------------------
@@ -147,6 +166,7 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
         bindString(events, "#DdHAlign",          "set_halign");
         bindString(events, "#DdVAlign",          "set_valign");
         bindString(events, "#DdTimeFormat",      "set_time_format");
+        bindString(events, "#DdWorldDay",        "set_world_day");
         bindString(events, "#DdTimezone",        "set_timezone_dropdown");
         bindString(events, "#DdHealthBarStyle",  "set_healthbar_style");
         bindString(events, "#TfTimezone",        "set_timezone_text");
@@ -223,6 +243,9 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
                 if (v != null) settings.setVerticalAlign(v);
             }
             case "set_time_format"       -> settings.setTime24h("24h".equalsIgnoreCase(val));
+            case "set_world_day"         -> {
+                try { settings.setWorldDayFormat(WorldDayFormat.valueOf(val)); } catch (IllegalArgumentException ignored) {}
+            }
             case "set_timezone_dropdown" -> {
                 applyTimezone(settings, val);
                 String display = "UTC".equals(val) ? "" : (val != null ? val : "");

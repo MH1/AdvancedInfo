@@ -29,7 +29,7 @@ Run `/ai ui` to open the in-game settings page. It provides a scrollable interfa
 
 - **Visibility** - toggle each HUD panel on or off individually.
 - **Alignment** - choose horizontal (`left`, `center`, `right`) and vertical (`top`, `bottom`) position.
-- **Time** - switch between 12-hour and 24-hour format, select a timezone from a dropdown, or type any IANA timezone ID directly.
+- **Time** - switch between 12-hour and 24-hour format, select a timezone from a dropdown, or type any IANA timezone ID directly, and choose how the world day is shown (hidden, day of the year, total days).
 - **Target Health Bar** - choose the display style (`overlay` or `below`).
 - **Display** - sliders for the font size (8-32) and the panel background opacity (0-100 %).
 
@@ -52,6 +52,7 @@ All commands use `/advanced-info` or the alias `/ai`.
 | `/ai show all` | Show all HUD elements. |
 | `/ai hide all` | Hide all HUD elements. |
 | `/ai time <12\|24>` | Set the time display format to 12-hour or 24-hour. |
+| `/ai day <none\|year\|total>` | Show no day, the day of the in-game year (default) or the total number of days since the world started in the world time row. |
 | `/ai timezone <zone>` | Set the timezone for the time display using an IANA zone ID (e.g. `Europe/Prague`, `America/New_York`, `UTC`). |
 | `/ai align <h> <v>` | Set both horizontal and vertical alignment at once. |
 | `/ai halign <left\|center\|right>` | Set the horizontal alignment of the HUD panel. |
@@ -63,6 +64,27 @@ All commands use `/advanced-info` or the alias `/ai`.
 | `/ai reset` | Reset all settings to their default values. |
 
 Available elements for `show`/`hide`: `time`, `biome`, `position`, `worldtime`, `zone`, `target`, `healthbar`, `timezone`.
+
+## Permissions
+
+Every player can use the mod by default. Server admins can take parts of it away, either for single
+players or for a whole group, by adding a deny entry (a permission prefixed with `-`).
+
+| Permission | Grants |
+|---|---|
+| `advancedinfo.command` | The `/ai` command and all its subcommands. |
+| `advancedinfo.command.<subcommand>` | A single subcommand, e.g. `advancedinfo.command.ui` or `advancedinfo.command.show.healthbar`. |
+| `advancedinfo.health` | Seeing the target's health (the numbers next to its name and the health bar). Without it, the health options are also hidden from the settings UI. |
+
+Examples:
+
+- Hide target health from one player: `/perm user add <uuid> -advancedinfo.health`
+- Hide target health for all regular players: `/perm group add hytale:Adventurer -advancedinfo.health`
+  (groups that inherit from `hytale:Adventurer` are affected too; `hytale:Admin` keeps it through `*`
+  unless you add the deny entry there as well)
+- Disallow the `/ai` command for one player: `/perm user add <uuid> -advancedinfo.command`
+
+The same entries can be written to `permissions.json` directly.
 
 ## Settings
 
@@ -91,6 +113,9 @@ with `hytale_mods_dir` (or `HYTALE_MODS_DIR`) pointing to that folder.
 
 The jar name and manifest version are derived from `plugin_version` and `release_type` in `gradle.properties`;
 see the comments there for details.
+
+`./gradlew curseforgeDescription` renders this README with absolute links into
+`build/curseforge/description.md` for the CurseForge project page.
 
 ## Changelog
 

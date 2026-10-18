@@ -11,10 +11,13 @@ import com.hypixel.hytale.server.core.command.system.arguments.types.SingleArgum
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractCommandCollection;
 import com.hypixel.hytale.server.core.command.system.basecommands.AbstractPlayerCommand;
 import com.hypixel.hytale.server.core.entity.entities.Player;
+import com.hypixel.hytale.server.core.permissions.provider.HytalePermissionsProvider;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
+import org.hlousek.hytale.plugin.advancedinfo.AdvancedInfoPermissions;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings;
+import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings.WorldDayFormat;
 import org.hlousek.hytale.plugin.advancedinfo.ui.HudStyle;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings.HorizontalAlign;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings.ProgressBarStyle;
@@ -31,11 +34,15 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
     public AdvancedInfoCommand(@Nonnull ComponentType<EntityStore, PlayerHudSettings> settingsComponentType) {
         super("advanced-info", "Manage the Advanced Info HUD.");
         addAliases("ai");
+        requirePermission(AdvancedInfoPermissions.COMMAND);
+        // Grants the command node (and its subcommands) to hytale:Adventurer; admins revoke it with -<node>.
+        setPermissionGroups(HytalePermissionsProvider.GROUP_ADVENTURER);
 
         addSubCommand(new ShowSubCommands(settingsComponentType));
         addSubCommand(new HideSubCommands(settingsComponentType));
         addSubCommand(new ConfigTimeSubCommand(settingsComponentType));
         addSubCommand(new ConfigTimezoneSubCommand(settingsComponentType));
+        addSubCommand(new ConfigDaySubCommand(settingsComponentType));
         addSubCommand(new AlignSubCommand(settingsComponentType));
         addSubCommand(new HAlignSubCommand(settingsComponentType));
         addSubCommand(new VAlignSubCommand(settingsComponentType));
@@ -91,6 +98,10 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
             @Nonnull PlayerRef playerRef,
             @Nonnull World world
         ) {
+            if (!entry.isPermitted(playerRef)) {
+                playerRef.sendMessage(Message.raw("This server has disabled " + entry.getDescription() + "."));
+                return;
+            }
             PlayerHudSettings settings = getSettings(store, ref, type);
             @Nullable String guardMessage = entry.checkGuard(settings);
             if (guardMessage != null) {
@@ -216,6 +227,56 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
             }
             getSettings(store, ref, type).setTime24h(format.equals("24"));
             playerRef.sendMessage(Message.raw("Time format set to " + format + "-hour."));
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // /ai day <none|year|total>
+    // -------------------------------------------------------------------------
+
+    private static class ConfigDaySubCommand extends AbstractPlayerCommand {
+        private final ComponentType<EntityStore, PlayerHudSettings> type;
+        private final RequiredArg<String> formatArg;
+
+        public ConfigDaySubCommand(@Nonnull ComponentType<EntityStore, PlayerHudSettings> type) {
+            super("day", "Set how the day is shown in the world time row.");
+            this.type = type;
+            this.formatArg = withRequiredArg(
+                "format", "Day format",
+                new SingleArgumentType<String>("Day Format", "\"none\", \"year\" (day of the year) or \"total\" (days since world start)", "\"none\"", "\"year\"", "\"total\"") {
+                    @Override public String parse(String input, ParseResult parseResult) { return input; }
+                }
+            );
+        }
+
+        @Override
+        protected void execute(@Nonnull CommandContext ctx, @Nonnull Store<EntityStore> store, @Nonnull Ref<EntityStore> ref, @Nonnull PlayerRef playerRef, @Nonnull World world) {
+            WorldDayFormat format = parse(this.formatArg.get(ctx));
+            if (format == null) {
+                playerRef.sendMessage(Message.raw("Invalid day format. Use \"none\", \"year\" or \"total\"."));
+                return;
+            }
+            getSettings(store, ref, type).setWorldDayFormat(format);
+            playerRef.sendMessage(Message.raw("World day format set to " + label(format) + "."));
+        }
+
+        @Nullable
+        static WorldDayFormat parse(@Nonnull String input) {
+            return switch (input.toLowerCase()) {
+                case "none", "off"            -> WorldDayFormat.NONE;
+                case "year", "dayofyear"      -> WorldDayFormat.DAY_OF_YEAR;
+                case "total", "days", "count" -> WorldDayFormat.TOTAL_DAYS;
+                default -> null;
+            };
+        }
+
+        @Nonnull
+        static String label(@Nonnull WorldDayFormat format) {
+            return switch (format) {
+                case NONE        -> "none";
+                case DAY_OF_YEAR -> "day of the year";
+                case TOTAL_DAYS  -> "total days";
+            };
         }
     }
 
@@ -420,12 +481,14 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
             StringBuilder sb = new StringBuilder("HUD component status:");
             for (HudToggleEntry entry : HudToggleRegistry.getEntries().values()) {
                 sb.append("\n  ").append(entry.getName())
-                  .append(": ").append(entry.isVisible(settings) ? "visible" : "hidden");
+                  .append(": ").append(!entry.isPermitted(playerRef) ? "disabled by the server"
+                      : entry.isVisible(settings) ? "visible" : "hidden");
             }
             sb.append("\n  alignment: ")
               .append(settings.getHorizontalAlign().name().toLowerCase())
               .append(" ").append(settings.getVerticalAlign().name().toLowerCase());
             sb.append("\n  time format: ").append(settings.isTime24h() ? "24h" : "12h");
+            sb.append("\n  world day: ").append(ConfigDaySubCommand.label(settings.getWorldDayFormat()));
             sb.append("\n  timezone: ").append(settings.getTimezone().getId());
             sb.append("\n  healthbar: ").append(settings.getHealthBarStyle().name().toLowerCase());
             sb.append("\n  font size: ").append(settings.getFontSize());

@@ -1,5 +1,6 @@
 package org.hlousek.hytale.plugin.advancedinfo.command;
 
+import org.hlousek.hytale.plugin.advancedinfo.AdvancedInfoPermissions;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings;
 
 import javax.annotation.Nonnull;
@@ -70,7 +71,8 @@ public class HudToggleRegistry {
             PlayerHudSettings::isHealthBarEnabled,
             PlayerHudSettings::isTargetEnabled,
             "Target display is disabled. Enable it first with /ai show target.",
-            true
+            true,
+            AdvancedInfoPermissions.HEALTH
         ));
 
         register(map, new HudToggleEntry(
@@ -81,7 +83,8 @@ public class HudToggleRegistry {
             PlayerHudSettings::isTimezoneOffsetVisible,
             PlayerHudSettings::isTimezoneSet,
             "No timezone set. The offset [UTC] is always shown. Use /ai config timezone to set one.",
-            true
+            true,
+            null
         ));
 
         register(map, new HudToggleEntry(

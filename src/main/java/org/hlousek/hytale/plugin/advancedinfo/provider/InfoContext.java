@@ -12,14 +12,19 @@ import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-/** Everything a provider may need to compute its value for one player in one update. */
+/**
+ * Everything a provider may need to compute its value for one player in one update.
+ *
+ * @param healthVisible whether the player may see target health ({@code AdvancedInfoPermissions.HEALTH})
+ */
 public record InfoContext(
     @Nonnull Player player,
     @Nonnull PlayerRef playerRef,
     @Nonnull Ref<EntityStore> entityRef,
     @Nonnull PlayerHudSettings settings,
     @Nonnull Store<EntityStore> store,
-    @Nonnull CommandBuffer<EntityStore> commandBuffer
+    @Nonnull CommandBuffer<EntityStore> commandBuffer,
+    boolean healthVisible
 ) {
     public static final String DEFAULT_LANGUAGE = "en-US";
 

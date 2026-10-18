@@ -16,6 +16,8 @@ import com.hypixel.hytale.server.core.event.events.player.PlayerReadyEvent;
 import com.hypixel.hytale.server.core.plugin.JavaPlugin;
 import com.hypixel.hytale.server.core.plugin.JavaPluginInit;
 import com.hypixel.hytale.server.core.io.ServerManager;
+import com.hypixel.hytale.server.core.permissions.PermissionsModule;
+import com.hypixel.hytale.server.core.permissions.provider.HytalePermissionsProvider;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import org.hlousek.hytale.plugin.advancedinfo.command.AdvancedInfoCommand;
@@ -44,6 +46,9 @@ public class AdvancedInfo extends JavaPlugin {
                 "AdvancedInfo",
                 PlayerHudSettings.CODEC
             );
+
+        // Default grants are collected into virtual groups in PermissionsModule.start(), after every plugin setup.
+        PermissionsModule.registerPermission(AdvancedInfoPermissions.HEALTH, HytalePermissionsProvider.GROUP_ADVENTURER);
 
         entityStoreRegistry.registerSystem(new InfoUpdateSystem(infoManager, settingsComponentType));
         getCommandRegistry().registerCommand((AbstractCommand) new AdvancedInfoCommand(settingsComponentType));

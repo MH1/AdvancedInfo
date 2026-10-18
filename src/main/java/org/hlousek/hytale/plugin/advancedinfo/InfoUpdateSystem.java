@@ -78,8 +78,9 @@ public class InfoUpdateSystem extends EntityTickingSystem<EntityStore> {
             return;
         }
 
+        boolean healthVisible = playerRef.hasPermission(AdvancedInfoPermissions.HEALTH);
         InfoContext ctx = new InfoContext(
-            player, playerRef, archetypeChunk.getReferenceTo(index), settings, store, commandBuffer);
+            player, playerRef, archetypeChunk.getReferenceTo(index), settings, store, commandBuffer, healthVisible);
 
         TargetInfo targetInfo = target.isEnabled(settings) ? target.resolve(ctx) : TargetInfo.NONE;
 
@@ -93,7 +94,7 @@ public class InfoUpdateSystem extends EntityTickingSystem<EntityStore> {
             targetInfo.sourceText(),
             targetInfo.healthPct(),
             settings.isTargetEnabled(),
-            settings.isHealthBarEnabled(),
+            settings.isHealthBarEnabled() && healthVisible,
             settings.isCaptionsEnabled(),
             settings.getHealthBarStyle(),
             settings.getHorizontalAlign(),

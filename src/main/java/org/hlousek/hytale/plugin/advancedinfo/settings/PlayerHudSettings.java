@@ -10,11 +10,13 @@ import java.time.ZoneId;
 
 public class PlayerHudSettings implements Component<EntityStore> {
 
-    private static final String CURRENT_VERSION = "1.0.2";
+    private static final String CURRENT_VERSION = "1.1.1";
 
     public enum HorizontalAlign { LEFT, CENTER, RIGHT }
     public enum VerticalAlign   { TOP, BOTTOM }
     public enum ProgressBarStyle { BELOW, OVERLAY }
+    /** How the day is shown in the world-time row. */
+    public enum WorldDayFormat { NONE, DAY_OF_YEAR, TOTAL_DAYS }
 
     private String version = "0.0.0";
     @Since(version = "1.0.0", defaultValue = "true")
@@ -49,6 +51,8 @@ public class PlayerHudSettings implements Component<EntityStore> {
     private boolean captionsEnabled = true;
     @Since(version = "1.0.2", defaultValue = "60")
     private int backgroundOpacity = 60;
+    @Since(version = "1.1.1", defaultValue = "DAY_OF_YEAR")
+    private String worldDayFormat = "DAY_OF_YEAR";
 
     public PlayerHudSettings() {}
 
@@ -69,6 +73,11 @@ public class PlayerHudSettings implements Component<EntityStore> {
 
     public boolean isTime24h()                 { return time24h; }
     public void setTime24h(boolean v)          { this.time24h = v; }
+
+    public WorldDayFormat getWorldDayFormat() {
+        try { return WorldDayFormat.valueOf(worldDayFormat); } catch (Exception e) { return WorldDayFormat.DAY_OF_YEAR; }
+    }
+    public void setWorldDayFormat(WorldDayFormat v) { this.worldDayFormat = v.name(); }
 
     public ZoneId getTimezone()                { return timezone; }
     public void setTimezone(ZoneId v)          { this.timezone = v; }
@@ -137,6 +146,7 @@ public class PlayerHudSettings implements Component<EntityStore> {
         copy.fontSize              = this.fontSize;
         copy.captionsEnabled       = this.captionsEnabled;
         copy.backgroundOpacity     = this.backgroundOpacity;
+        copy.worldDayFormat        = this.worldDayFormat;
         copy.time24h               = this.time24h;
         copy.timezone              = this.timezone;
         copy.timezoneOffsetVisible = this.timezoneOffsetVisible;
@@ -171,6 +181,8 @@ public class PlayerHudSettings implements Component<EntityStore> {
                 (c, v) -> c.captionsEnabled = v, c -> c.captionsEnabled).add()
             .append(new KeyedCodec<>("BackgroundOpacity",    Codec.INTEGER),
                 (c, v) -> c.backgroundOpacity = v, c -> c.backgroundOpacity).add()
+            .append(new KeyedCodec<>("WorldDayFormat",       Codec.STRING),
+                (c, v) -> c.worldDayFormat = v, c -> c.worldDayFormat).add()
             .append(new KeyedCodec<>("Time24h",              Codec.BOOLEAN),
                 (c, v) -> c.time24h = v, c -> c.time24h).add()
             .append(new KeyedCodec<>("Timezone",             Codec.STRING),

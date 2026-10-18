@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.2.0 (2026-10-18)
+
+- Added permissions `advancedinfo.command` (with `advancedinfo.command.<subcommand>`) and `advancedinfo.health`, both granted by default. Server admins can deny `advancedinfo.health` per player or for everyone; the health numbers, the health bar and its settings are then hidden.
+- The world time row can show the day of the year (default), the total number of days since the world started, or no day at all (`/ai day <none|year|total>`, dropdown in the settings UI).
+- Bugfix: Players without operator rights can use the `/ai` command again; it is now granted to every player by default and admins can revoke it per player or group.
+- Bugfix: Invisible spawn markers, spawn beacons and patrol path markers are no longer picked up as the target (they showed up as raw object data, e.g. in the temple); the block behind them is described instead.
+- Bugfix: Entities whose name is an untranslated message key no longer show raw object data as the target name; the NPC role or model name is used instead.
+
 ## v1.1.0 (2026-10-17)
 
 - Requires Hytale server 0.7.x.

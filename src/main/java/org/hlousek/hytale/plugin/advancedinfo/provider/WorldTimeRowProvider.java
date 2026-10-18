@@ -23,6 +23,8 @@ public final class WorldTimeRowProvider implements InfoRowProvider {
         if (world == null) { return null; }
         WorldTimeResource worldTime = (WorldTimeResource) ctx.store().getResource(WorldTimeResource.getResourceType());
         if (worldTime == null || world.getWorldConfig().isGameTimePaused()) { return null; }
-        return HudTimeFormatter.worldTime(worldTime.getGameDateTime(), ctx.settings().isTime24h());
+        return HudTimeFormatter.worldTime(
+            worldTime.getGameDateTime(), worldTime.getGameTime(), WorldTimeResource.ZERO_YEAR,
+            ctx.settings().getWorldDayFormat(), ctx.settings().isTime24h());
     }
 }

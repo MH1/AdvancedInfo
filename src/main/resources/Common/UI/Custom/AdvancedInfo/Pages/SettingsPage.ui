@@ -71,7 +71,7 @@ $C.@PageOverlay {
           @CheckboxRow { $C.@CheckBox #ChkWorldTime { }      Label { Text: "World Time";                   Style: @RowLabelStyle; Anchor: (Left: 10); } }
           @CheckboxRow { $C.@CheckBox #ChkZone { }           Label { Text: "Zone / Tier";                  Style: @RowLabelStyle; Anchor: (Left: 10); } }
           @CheckboxRow { $C.@CheckBox #ChkTarget { }         Label { Text: "Target";                       Style: @RowLabelStyle; Anchor: (Left: 10); } }
-          @CheckboxRow { $C.@CheckBox #ChkHealthBar { }      Label { Text: "Health Bar (requires Target)"; Style: @RowLabelStyle; Anchor: (Left: 10); } }
+          @CheckboxRow #RowHealthBar { $C.@CheckBox #ChkHealthBar { }      Label { Text: "Health Bar (requires Target)"; Style: @RowLabelStyle; Anchor: (Left: 10); } }
           @CheckboxRow { $C.@CheckBox #ChkCaptions { }       Label { Text: "Captions";                     Style: @RowLabelStyle; Anchor: (Left: 10); } }
           @CheckboxRow { $C.@CheckBox #ChkTimezoneOffset { } Label { Text: "Timezone Offset Label";        Style: @RowLabelStyle; Anchor: (Left: 10); } }
         }
@@ -114,16 +114,20 @@ $C.@PageOverlay {
             Label { Text: "Or type a custom IANA timezone ID:"; Style: (FontSize: 13, TextColor: #96a9be, VerticalAlignment: Center); }
           }
           $C.@TextField #TfTimezone { Anchor: (Height: 28, Top: 4); }
+          @FieldRow { Anchor: (Height: 34, Top: 6);
+            Label { Text: "World day"; Style: @FieldLabelStyle; FlexWeight: 1; }
+            $C.@DropdownBox #DdWorldDay { Anchor: (Width: 200, Height: 28); }
+          }
         }
 
-        Group {
+        Group #HealthBarHeader {
           LayoutMode: Left;
           Anchor: (Height: 30, Top: 12);
           Background: #9c4c4c(0.15);
           Padding: (Left: 10);
           Label { Text: "Target Health Bar"; Style: (FontSize: 16, TextColor: #9c4c4c, RenderBold: true); }
         }
-        @SectionCard { Anchor: (Top: 6);
+        @SectionCard #HealthBarSection { Anchor: (Top: 6);
           @FieldRow {
             Label { Text: "Style"; Style: @FieldLabelStyle; FlexWeight: 1; }
             $C.@DropdownBox #DdHealthBarStyle { Anchor: (Width: 200, Height: 28); }

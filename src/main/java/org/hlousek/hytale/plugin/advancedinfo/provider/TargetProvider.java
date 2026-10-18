@@ -14,11 +14,13 @@ import com.hypixel.hytale.server.core.modules.entity.component.TransformComponen
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatMap;
 import com.hypixel.hytale.server.core.modules.entitystats.EntityStatValue;
 import com.hypixel.hytale.server.core.modules.entitystats.asset.DefaultEntityStatTypes;
+import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.modules.i18n.I18nModule;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.builtin.adventure.teleporter.component.Teleporter;
 import com.hypixel.hytale.builtin.crafting.component.BenchBlock;
+import com.hypixel.hytale.builtin.path.entities.PatrolPathMarkerEntity;
 import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.server.core.universe.world.chunk.section.BlockComponentSection;
 import com.hypixel.hytale.server.core.universe.world.chunk.section.BlockSection;
@@ -27,6 +29,8 @@ import com.hypixel.hytale.server.core.universe.world.storage.ChunkStore;
 import com.hypixel.hytale.server.core.universe.world.storage.EntityStore;
 import com.hypixel.hytale.server.core.util.TargetUtil;
 import com.hypixel.hytale.server.npc.entities.NPCEntity;
+import com.hypixel.hytale.server.spawning.beacons.LegacySpawnBeaconEntity;
+import com.hypixel.hytale.server.spawning.spawnmarkers.SpawnMarkerEntity;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings;
 import org.joml.Vector2d;
 import org.joml.Vector3d;
@@ -69,7 +73,7 @@ public final class TargetProvider {
         // Prefer a named entity under the crosshair; anything we cannot describe
         // (block entities, markers, ...) must not shadow the block behind it.
         Ref<EntityStore> entity = findLookedAtEntity(store, playerEntityRef, eyePos, lookDir);
-        TargetInfo info = entity != null ? describeEntity(store, entity) : null;
+        TargetInfo info = entity != null ? describeEntity(ctx, store, entity) : null;
         if (info == null) {
             info = describeTargetBlock(ctx, eyePos, lookDir);
         }
@@ -93,6 +97,7 @@ public final class TargetProvider {
         double minDist2 = Double.MAX_VALUE;
         for (Ref<EntityStore> candidate : nearby) {
             if (candidate == null || !candidate.isValid() || candidate.equals(self)) continue;
+            if (isMarker(store, candidate)) continue;
             TransformComponent tc = store.getComponent(candidate, TransformComponent.getComponentType());
             BoundingBox bb = store.getComponent(candidate, BoundingBox.getComponentType());
             // Only entities with a real hitbox can be aimed at.
@@ -108,16 +113,26 @@ public final class TargetProvider {
         return closest;
     }
 
+    /**
+     * Invisible helper entities (spawn markers, spawn beacons, patrol path markers) have hitboxes
+     * but nothing a player can see; they must never be reported as the target.
+     */
+    private static boolean isMarker(@Nonnull Store<EntityStore> store, @Nonnull Ref<EntityStore> entity) {
+        return store.getComponent(entity, SpawnMarkerEntity.getComponentType()) != null
+            || store.getComponent(entity, LegacySpawnBeaconEntity.getComponentType()) != null
+            || store.getComponent(entity, PatrolPathMarkerEntity.getComponentType()) != null;
+    }
+
     /** Describes a living/named entity, or returns null when nothing meaningful can be shown for it. */
     @Nullable
-    private static TargetInfo describeEntity(@Nonnull Store<EntityStore> store, @Nonnull Ref<EntityStore> entity) {
+    private static TargetInfo describeEntity(@Nonnull InfoContext ctx, @Nonnull Store<EntityStore> store, @Nonnull Ref<EntityStore> entity) {
         DisplayNameComponent displayName = store.getComponent(entity, DisplayNameComponent.getComponentType());
         PlayerRef targetPlayerRef = store.getComponent(entity, PlayerRef.getComponentType());
         NPCEntity npcEntity = store.getComponent(entity, NPCEntity.getComponentType());
 
         String text = null;
         if (displayName != null && displayName.getDisplayName() != null) {
-            text = displayName.getDisplayName().getAnsiMessage();
+            text = plainText(displayName.getDisplayName(), ctx.language());
         }
         if (isBlank(text) && targetPlayerRef != null) {
             text = targetPlayerRef.getUsername();
@@ -134,7 +149,7 @@ public final class TargetProvider {
         if (isBlank(text)) { return null; }
 
         float healthPct = -1f;
-        EntityStatMap statMap = store.getComponent(entity, EntityStatMap.getComponentType());
+        EntityStatMap statMap = ctx.healthVisible() ? store.getComponent(entity, EntityStatMap.getComponentType()) : null;
         if (statMap != null) {
             EntityStatValue health = statMap.get(DefaultEntityStatTypes.getHealth());
             if (health != null) {
@@ -303,6 +318,24 @@ public final class TargetProvider {
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /**
+     * Resolves a display-name message to plain text in the player's language.
+     * Returns null for translation keys without a translation; Message.getAnsiMessage()
+     * would otherwise fall back to the key plus the toString() of its parameter maps.
+     */
+    @Nullable
+    private static String plainText(@Nonnull Message message, @Nonnull String language) {
+        String raw = message.getRawText();
+        if (raw != null) { return raw; }
+        String key = message.getMessageId();
+        if (isBlank(key)) { return null; }
+        String translated = I18nModule.get().getMessage(language, key);
+        if (translated == null && !InfoContext.DEFAULT_LANGUAGE.equals(language)) {
+            translated = I18nModule.get().getMessage(InfoContext.DEFAULT_LANGUAGE, key);
+        }
+        return translated;
+    }
 
     /** Normalizes blank text to a single space and hides the vanilla "Hytale" pack name. */
     @Nonnull
