@@ -88,6 +88,18 @@ public class HudToggleRegistry {
         ));
 
         register(map, new HudToggleEntry(
+            "storage",
+            "the storage contents panel",
+            s -> s.setStorageEnabled(true),
+            s -> s.setStorageEnabled(false),
+            PlayerHudSettings::isStorageEnabled,
+            null,
+            null,
+            false,
+            AdvancedInfoPermissions.STORAGE
+        ));
+
+        register(map, new HudToggleEntry(
             "captions",
             "all HUD element captions",
             s -> s.setCaptionsEnabled(true),

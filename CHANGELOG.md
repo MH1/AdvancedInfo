@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.3.0 (2026-10-19)
+
+- New storage panel: while looking at a storage block (chest, barrel, …) it lists the contents as item icons with total counts, largest first. It has its own alignment (shown below the info panel when both use the same one), is shown by default where the info panel is, and can be toggled with `/ai show storage` / `/ai hide storage`.
+- With SimpleClaims installed, the storage panel only shows contents of storage blocks the player may open in claimed chunks.
+- Added `/ai storage align <h> <v>`, `/ai storage rows <n>`, `/ai storage size <n>` (size of the item icons and counts, independent of the font size) and `/ai storage outline <on|off>` (outline around the counts).
+- Added the permission `advancedinfo.storage`, granted by default.
+- The settings UI is split into the tabs Info, Storage and Display; SAVE and RESET DEFAULTS stay visible on every tab.
+
 ## v1.2.0 (2026-10-18)
 
 - Added permissions `advancedinfo.command` (with `advancedinfo.command.<subcommand>`) and `advancedinfo.health`, both granted by default. Server admins can deny `advancedinfo.health` per player or for everyone; the health numbers, the health bar and its settings are then hidden.

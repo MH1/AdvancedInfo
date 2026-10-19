@@ -2,6 +2,7 @@ $C = "../../Common.ui";
 
 @RowLabelStyle = LabelStyle(FontSize: 14, TextColor: #bfcdd5, VerticalAlignment: Center);
 @FieldLabelStyle = LabelStyle(FontSize: 14, TextColor: #96a9be, VerticalAlignment: Center);
+@NoteLabelStyle = LabelStyle(FontSize: 13, TextColor: #96a9be, VerticalAlignment: Center, Wrap: true);
 
 @CheckboxRow = Group {
   LayoutMode: Left;
@@ -23,12 +24,32 @@ $C = "../../Common.ui";
   OutlineSize: 1;
 };
 
+// One panel per tab; only the selected one is visible (SettingsPage.applyTab).
+@TabPanel = Group {
+  FlexWeight: 1;
+  LayoutMode: TopScrolling;
+  ScrollbarStyle: $C.@DefaultScrollbarStyle;
+  Padding: (Right: 8);
+};
+
 @ButtonStyle = TextButtonStyle(
   Default: (Background: $C.@DefaultSquareButtonDefaultBackground, LabelStyle: (FontSize: 13, TextColor: #bfcdd5, RenderBold: true, RenderUppercase: true, HorizontalAlignment: Center, VerticalAlignment: Center)),
   Hovered: (Background: $C.@DefaultSquareButtonHoveredBackground, LabelStyle: (FontSize: 13, TextColor: #ffffff, RenderBold: true, RenderUppercase: true, HorizontalAlignment: Center, VerticalAlignment: Center)),
   Pressed: (Background: $C.@DefaultSquareButtonPressedBackground, LabelStyle: (FontSize: 13, TextColor: #ffffff, RenderBold: true, RenderUppercase: true, HorizontalAlignment: Center, VerticalAlignment: Center)),
   Sounds: $C.@ButtonSounds
 );
+
+@TabButtonStyle = TextButtonStyle(
+  Default: (Background: #000000(0.15), LabelStyle: (FontSize: 14, TextColor: #96a9be, RenderBold: true, RenderUppercase: true, HorizontalAlignment: Center, VerticalAlignment: Center)),
+  Hovered: (Background: #93844c(0.15), LabelStyle: (FontSize: 14, TextColor: #ffffff, RenderBold: true, RenderUppercase: true, HorizontalAlignment: Center, VerticalAlignment: Center)),
+  Pressed: (Background: #93844c(0.25), LabelStyle: (FontSize: 14, TextColor: #ffffff, RenderBold: true, RenderUppercase: true, HorizontalAlignment: Center, VerticalAlignment: Center)),
+  Sounds: $C.@ButtonSounds
+);
+
+// The mark slot always takes its 3 px, so hiding the mark does not shift the tab bar.
+@TabMarkSlot = Group {
+  Anchor: (Height: 3);
+};
 
 $C.@PageOverlay {
   $C.@DecoratedContainer {
@@ -50,16 +71,40 @@ $C.@PageOverlay {
 
     #Content {
       FlexWeight: 1;
-      LayoutMode: TopScrolling;
-      ScrollbarStyle: $C.@DefaultScrollbarStyle;
 
-      Group {
-        LayoutMode: Top;
-        Padding: (Right: 8);
+      Group #Tabs {
+        LayoutMode: Left;
+        Anchor: (Height: 33, Bottom: 10);
 
         Group {
+          LayoutMode: Top;
+          FlexWeight: 1;
+          TextButton #TabInfo { Anchor: (Height: 30); Text: "Info"; Style: @TabButtonStyle; }
+          @TabMarkSlot { Group #TabInfoMark { Background: #93844c; } }
+        }
+        Group #TabStorageGap { Anchor: (Width: 6); }
+        Group #TabStorageItem {
+          LayoutMode: Top;
+          FlexWeight: 1;
+          TextButton #TabStorage { Anchor: (Height: 30); Text: "Storage"; Style: @TabButtonStyle; }
+          @TabMarkSlot { Group #TabStorageMark { Background: #93844c; Visible: false; } }
+        }
+        Group { Anchor: (Width: 6); }
+        Group {
+          LayoutMode: Top;
+          FlexWeight: 1;
+          TextButton #TabDisplay { Anchor: (Height: 30); Text: "Display"; Style: @TabButtonStyle; }
+          @TabMarkSlot { Group #TabDisplayMark { Background: #93844c; Visible: false; } }
+        }
+      }
+
+      // ---------------------------------------------------------------------
+      // INFO tab - the main info panel
+      // ---------------------------------------------------------------------
+      @TabPanel #PanelInfo {
+        Group {
           LayoutMode: Left;
-          Anchor: (Height: 30, Top: 4);
+          Anchor: (Height: 30);
           Background: #93844c(0.15);
           Padding: (Left: 10);
           Label { Text: "Visibility"; Style: (FontSize: 16, TextColor: #93844c, RenderBold: true); }
@@ -133,10 +178,79 @@ $C.@PageOverlay {
             $C.@DropdownBox #DdHealthBarStyle { Anchor: (Width: 200, Height: 28); }
           }
         }
+      }
+
+      // ---------------------------------------------------------------------
+      // STORAGE tab - contents of the targeted storage block
+      // ---------------------------------------------------------------------
+      @TabPanel #PanelStorage {
+        Visible: false;
 
         Group {
           LayoutMode: Left;
-          Anchor: (Height: 30, Top: 12);
+          Anchor: (Height: 30);
+          Background: #93844c(0.15);
+          Padding: (Left: 10);
+          Label { Text: "Storage Contents"; Style: (FontSize: 16, TextColor: #93844c, RenderBold: true); }
+        }
+        @SectionCard { Anchor: (Top: 6);
+          @CheckboxRow { $C.@CheckBox #ChkStorage { } Label { Text: "Show contents of the targeted storage"; Style: @RowLabelStyle; Anchor: (Left: 10); } }
+        }
+
+        Group #StorageOptions {
+          LayoutMode: Top;
+
+          Group {
+            LayoutMode: Left;
+            Anchor: (Height: 30, Top: 12);
+            Background: #4c7a9c(0.15);
+            Padding: (Left: 10);
+            Label { Text: "Alignment"; Style: (FontSize: 16, TextColor: #4c7a9c, RenderBold: true); }
+          }
+          @SectionCard { Anchor: (Top: 6);
+            @FieldRow {
+              Label { Text: "Horizontal"; Style: @FieldLabelStyle; FlexWeight: 1; }
+              $C.@DropdownBox #DdStorageHAlign { Anchor: (Width: 200, Height: 28); }
+            }
+            @FieldRow {
+              Label { Text: "Vertical"; Style: @FieldLabelStyle; FlexWeight: 1; }
+              $C.@DropdownBox #DdStorageVAlign { Anchor: (Width: 200, Height: 28); }
+            }
+            Group { Anchor: (Top: 6, Height: 36);
+              Label { Text: "With the same alignment as Info, the storage panel is shown below it."; Style: @NoteLabelStyle; }
+            }
+          }
+
+          Group {
+            LayoutMode: Left;
+            Anchor: (Height: 30, Top: 12);
+            Background: #7c4c9c(0.15);
+            Padding: (Left: 10);
+            Label { Text: "Layout"; Style: (FontSize: 16, TextColor: #7c4c9c, RenderBold: true); }
+          }
+          @SectionCard { Anchor: (Top: 6);
+            @FieldRow {
+              Label { Text: "Max rows"; Style: @FieldLabelStyle; FlexWeight: 1; }
+              $C.@SliderNumberField #SlStorageMaxRows { @Anchor = (Width: 260); Min: 1; Max: 6; Step: 1; Value: 2; }
+            }
+            @FieldRow {
+              Label { Text: "Item size"; Style: @FieldLabelStyle; FlexWeight: 1; }
+              $C.@SliderNumberField #SlStorageItemSize { @Anchor = (Width: 260); Min: 10; Max: 32; Step: 1; Value: 18; }
+            }
+            @CheckboxRow { $C.@CheckBox #ChkStorageOutline { } Label { Text: "Outline around item counts"; Style: @RowLabelStyle; Anchor: (Left: 10); } }
+          }
+        }
+      }
+
+      // ---------------------------------------------------------------------
+      // DISPLAY tab - shared by all panels
+      // ---------------------------------------------------------------------
+      @TabPanel #PanelDisplay {
+        Visible: false;
+
+        Group {
+          LayoutMode: Left;
+          Anchor: (Height: 30);
           Background: #7c4c9c(0.15);
           Padding: (Left: 10);
           Label { Text: "Display"; Style: (FontSize: 16, TextColor: #7c4c9c, RenderBold: true); }
@@ -150,15 +264,18 @@ $C.@PageOverlay {
             Label { Text: "Background Opacity (%)"; Style: @FieldLabelStyle; FlexWeight: 1; }
             $C.@SliderNumberField #SlOpacity { @Anchor = (Width: 260); Min: 0; Max: 100; Step: 1; Value: 60; }
           }
+          Group { Anchor: (Top: 6, Height: 20);
+            Label { Text: "Applies to the Info and Storage panels."; Style: @NoteLabelStyle; }
+          }
         }
+      }
 
-        Group {
-          LayoutMode: Left;
-          Anchor: (Height: 38, Top: 14, Bottom: 6);
-          TextButton #BtnSave  { FlexWeight: 1; Text: "SAVE";           Style: @ButtonStyle; }
-          Group { Anchor: (Width: 10); }
-          TextButton #BtnReset { FlexWeight: 1; Text: "RESET DEFAULTS"; Style: @ButtonStyle; }
-        }
+      Group {
+        LayoutMode: Left;
+        Anchor: (Height: 38, Top: 10);
+        TextButton #BtnSave  { FlexWeight: 1; Text: "SAVE";           Style: @ButtonStyle; }
+        Group { Anchor: (Width: 10); }
+        TextButton #BtnReset { FlexWeight: 1; Text: "RESET DEFAULTS"; Style: @ButtonStyle; }
       }
     }
   }

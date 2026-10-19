@@ -13,7 +13,7 @@ import javax.annotation.Nonnull;
  * it in {@link InfoHudMarkup} or {@link InfoHud#renderContent}; no templates
  * need to be generated.
  */
-public record HudStyle(int fontSize, int backgroundOpacity) {
+public record HudStyle(int fontSize, int backgroundOpacity, int storageItemSize, boolean storageCountOutline) {
 
     public static final int MIN_FONT_SIZE     = 8;
     public static final int MAX_FONT_SIZE     = 32;
@@ -26,16 +26,30 @@ public record HudStyle(int fontSize, int backgroundOpacity) {
 
     public static final String BACKGROUND_COLOR = "#000000";
 
+    /** Storage item size in font-size units; below 10 the counts no longer fit next to the icon. */
+    public static final int MIN_STORAGE_ITEM_SIZE = 10;
+    public static final int MAX_STORAGE_ITEM_SIZE = 32;
+
     public static final HudStyle DEFAULT = new HudStyle(DEFAULT_FONT_SIZE, DEFAULT_OPACITY);
 
     public HudStyle {
         fontSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, fontSize));
         backgroundOpacity = Math.max(MIN_OPACITY, Math.min(MAX_OPACITY, backgroundOpacity));
+        storageItemSize = Math.max(MIN_STORAGE_ITEM_SIZE, Math.min(MAX_STORAGE_ITEM_SIZE, storageItemSize));
+    }
+
+    public HudStyle(int fontSize, int backgroundOpacity, int storageItemSize) {
+        this(fontSize, backgroundOpacity, storageItemSize, true);
+    }
+
+    public HudStyle(int fontSize, int backgroundOpacity) {
+        this(fontSize, backgroundOpacity, DEFAULT_FONT_SIZE);
     }
 
     @Nonnull
     public static HudStyle of(@Nonnull PlayerHudSettings settings) {
-        return new HudStyle(settings.getFontSize(), settings.getBackgroundOpacity());
+        return new HudStyle(settings.getFontSize(), settings.getBackgroundOpacity(), settings.getStorageItemSize(),
+            settings.isStorageCountOutline());
     }
 
     /**
@@ -78,4 +92,26 @@ public record HudStyle(int fontSize, int backgroundOpacity) {
 
     /** Width of the target value column; also the full width of the health bar. */
     public int targetWidth()          { return scaled(300); }
+
+    /** Width of the info panel with captions and the target row, its widest regular layout. */
+    public int panelWidth()           { return 2 * panelHorizontalPadding() + captionMinWidth() + targetWidth(); }
+
+    /**
+     * Storage item cells scale with {@link #storageItemSize()} (same units as the font size), independent
+     * of the font; the panel itself keeps the info panel's width, so only the items per row change.
+     */
+    public float storageScale()       { return storageItemSize / (float) DEFAULT_FONT_SIZE; }
+    public int storageIconSize()      { return Math.max(12, Math.round(32 * storageScale())); }
+    public int storageCellGap()       { return Math.max(1, Math.round(4 * storageScale())); }
+    public int storageCountFontSize() { return Math.max(7, Math.round(12 * storageScale())); }
+    /** "+N" and "Empty" labels of the storage panel. */
+    public int storageLabelFontSize() { return Math.max(7, Math.round(13 * storageScale())); }
+    /** Space between the info panel and a storage panel stacked below it. */
+    public int storagePanelGap()      { return Math.max(2, scaled(6)); }
+
+    /** Item cells that fit next to each other in a storage panel as wide as the info panel. */
+    public int storageItemsPerRow() {
+        int inner = panelWidth() - 2 * panelHorizontalPadding();
+        return Math.max(1, (inner + storageCellGap()) / (storageIconSize() + storageCellGap()));
+    }
 }

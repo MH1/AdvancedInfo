@@ -51,6 +51,7 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
         addSubCommand(new HealthBarSubCommand(settingsComponentType));
         addSubCommand(new FontSubCommand(settingsComponentType));
         addSubCommand(new OpacitySubCommand(settingsComponentType));
+        addSubCommand(new StorageSubCommands(settingsComponentType));
         addSubCommand(new UiSubCommand(settingsComponentType));
     }
 
@@ -491,6 +492,14 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
             sb.append("\n  world day: ").append(ConfigDaySubCommand.label(settings.getWorldDayFormat()));
             sb.append("\n  timezone: ").append(settings.getTimezone().getId());
             sb.append("\n  healthbar: ").append(settings.getHealthBarStyle().name().toLowerCase());
+            if (playerRef.hasPermission(AdvancedInfoPermissions.STORAGE)) {
+                sb.append("\n  storage alignment: ")
+                  .append(settings.getStorageHorizontalAlign().name().toLowerCase())
+                  .append(" ").append(settings.getStorageVerticalAlign().name().toLowerCase());
+                sb.append("\n  storage rows: ").append(settings.getStorageMaxRows());
+                sb.append("\n  storage item size: ").append(settings.getStorageItemSize());
+                sb.append("\n  storage count outline: ").append(settings.isStorageCountOutline() ? "on" : "off");
+            }
             sb.append("\n  font size: ").append(settings.getFontSize());
             sb.append("\n  background opacity: ").append(settings.getBackgroundOpacity()).append("%");
             playerRef.sendMessage(Message.raw(sb.toString()));
@@ -631,6 +640,194 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
             }
             getSettings(store, ref, type).setBackgroundOpacity(percent);
             playerRef.sendMessage(Message.raw("Background opacity set to " + percent + "%."));
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // /ai storage align <h> <v> | rows <n> | size <n> | outline <on|off>
+    // -------------------------------------------------------------------------
+
+    private static class StorageSubCommands extends AbstractCommandCollection {
+
+        public StorageSubCommands(@Nonnull ComponentType<EntityStore, PlayerHudSettings> type) {
+            super("storage", "Configure the storage contents panel.");
+            addSubCommand(new StorageAlignSubCommand(type));
+            addSubCommand(new StorageRowsSubCommand(type));
+            addSubCommand(new StorageSizeSubCommand(type));
+            addSubCommand(new StorageOutlineSubCommand(type));
+        }
+
+        /** Storage settings stay hidden from players the server denies the storage panel. */
+        static boolean checkPermitted(@Nonnull PlayerRef playerRef) {
+            if (playerRef.hasPermission(AdvancedInfoPermissions.STORAGE)) return true;
+            playerRef.sendMessage(Message.raw("This server has disabled the storage contents panel."));
+            return false;
+        }
+    }
+
+    private static class StorageAlignSubCommand extends AbstractPlayerCommand {
+
+        private final ComponentType<EntityStore, PlayerHudSettings> type;
+        private final RequiredArg<String> hArg;
+        private final RequiredArg<String> vArg;
+
+        public StorageAlignSubCommand(@Nonnull ComponentType<EntityStore, PlayerHudSettings> type) {
+            super("align", "Set the storage panel alignment: /ai storage align <left|center|right> <top|bottom>.");
+            this.type = type;
+            this.hArg = withRequiredArg(
+                "horizontal", "Horizontal alignment",
+                new SingleArgumentType<String>("Horizontal", "left|center|right", "left", "center", "right") {
+                    @Override public String parse(String input, ParseResult parseResult) { return input.toLowerCase(); }
+                }
+            );
+            this.vArg = withRequiredArg(
+                "vertical", "Vertical alignment",
+                new SingleArgumentType<String>("Vertical", "top|bottom", "top", "bottom") {
+                    @Override public String parse(String input, ParseResult parseResult) { return input.toLowerCase(); }
+                }
+            );
+        }
+
+        @Override
+        protected void execute(
+            @Nonnull CommandContext ctx,
+            @Nonnull Store<EntityStore> store,
+            @Nonnull Ref<EntityStore> ref,
+            @Nonnull PlayerRef playerRef,
+            @Nonnull World world
+        ) {
+            if (!StorageSubCommands.checkPermitted(playerRef)) return;
+            HorizontalAlign h = parseHorizontal(hArg.get(ctx));
+            VerticalAlign   v = parseVertical(vArg.get(ctx));
+            if (h == null) { playerRef.sendMessage(Message.raw("Invalid horizontal alignment. Use: left, center, right.")); return; }
+            if (v == null) { playerRef.sendMessage(Message.raw("Invalid vertical alignment. Use: top, bottom.")); return; }
+            PlayerHudSettings settings = getSettings(store, ref, type);
+            settings.setStorageHorizontalAlign(h);
+            settings.setStorageVerticalAlign(v);
+            playerRef.sendMessage(Message.raw("Storage panel alignment set to " + h.name().toLowerCase() + " " + v.name().toLowerCase() + "."));
+        }
+    }
+
+    private static class StorageRowsSubCommand extends AbstractPlayerCommand {
+
+        private static final int MIN = PlayerHudSettings.MIN_STORAGE_ROWS;
+        private static final int MAX = PlayerHudSettings.MAX_STORAGE_ROWS;
+
+        private final ComponentType<EntityStore, PlayerHudSettings> type;
+        private final RequiredArg<String> rowsArg;
+
+        public StorageRowsSubCommand(@Nonnull ComponentType<EntityStore, PlayerHudSettings> type) {
+            super("rows", "Set the maximum number of item rows in the storage panel (" + MIN + "-" + MAX + ").");
+            this.type = type;
+            this.rowsArg = withRequiredArg(
+                "rows", "Maximum rows",
+                new SingleArgumentType<String>("Rows", "Integer between " + MIN + " and " + MAX, "2") {
+                    @Override public String parse(String input, ParseResult parseResult) { return input; }
+                }
+            );
+        }
+
+        @Override
+        protected void execute(
+            @Nonnull CommandContext ctx,
+            @Nonnull Store<EntityStore> store,
+            @Nonnull Ref<EntityStore> ref,
+            @Nonnull PlayerRef playerRef,
+            @Nonnull World world
+        ) {
+            if (!StorageSubCommands.checkPermitted(playerRef)) return;
+            int rows;
+            try {
+                rows = Integer.parseInt(rowsArg.get(ctx));
+            } catch (NumberFormatException e) {
+                playerRef.sendMessage(Message.raw("Invalid number of rows. Use a number between " + MIN + " and " + MAX + "."));
+                return;
+            }
+            if (rows < MIN || rows > MAX) {
+                playerRef.sendMessage(Message.raw("Rows must be between " + MIN + " and " + MAX + "."));
+                return;
+            }
+            getSettings(store, ref, type).setStorageMaxRows(rows);
+            playerRef.sendMessage(Message.raw("Storage panel rows set to " + rows + "."));
+        }
+    }
+
+    private static class StorageSizeSubCommand extends AbstractPlayerCommand {
+
+        private static final int MIN = HudStyle.MIN_STORAGE_ITEM_SIZE;
+        private static final int MAX = HudStyle.MAX_STORAGE_ITEM_SIZE;
+
+        private final ComponentType<EntityStore, PlayerHudSettings> type;
+        private final RequiredArg<String> sizeArg;
+
+        public StorageSizeSubCommand(@Nonnull ComponentType<EntityStore, PlayerHudSettings> type) {
+            super("size", "Set the size of the item icons and counts in the storage panel (" + MIN + "-" + MAX + ").");
+            this.type = type;
+            this.sizeArg = withRequiredArg(
+                "size", "Item size",
+                new SingleArgumentType<String>("Item Size", "Integer between " + MIN + " and " + MAX, String.valueOf(HudStyle.DEFAULT_FONT_SIZE)) {
+                    @Override public String parse(String input, ParseResult parseResult) { return input; }
+                }
+            );
+        }
+
+        @Override
+        protected void execute(
+            @Nonnull CommandContext ctx,
+            @Nonnull Store<EntityStore> store,
+            @Nonnull Ref<EntityStore> ref,
+            @Nonnull PlayerRef playerRef,
+            @Nonnull World world
+        ) {
+            if (!StorageSubCommands.checkPermitted(playerRef)) return;
+            int size;
+            try {
+                size = Integer.parseInt(sizeArg.get(ctx));
+            } catch (NumberFormatException e) {
+                playerRef.sendMessage(Message.raw("Invalid item size. Use a number between " + MIN + " and " + MAX + "."));
+                return;
+            }
+            if (size < MIN || size > MAX) {
+                playerRef.sendMessage(Message.raw("Item size must be between " + MIN + " and " + MAX + "."));
+                return;
+            }
+            getSettings(store, ref, type).setStorageItemSize(size);
+            playerRef.sendMessage(Message.raw("Storage panel item size set to " + size + "."));
+        }
+    }
+
+    private static class StorageOutlineSubCommand extends AbstractPlayerCommand {
+
+        private final ComponentType<EntityStore, PlayerHudSettings> type;
+        private final RequiredArg<String> stateArg;
+
+        public StorageOutlineSubCommand(@Nonnull ComponentType<EntityStore, PlayerHudSettings> type) {
+            super("outline", "Turn the black outline around the item counts in the storage panel on or off.");
+            this.type = type;
+            this.stateArg = withRequiredArg(
+                "state", "Outline",
+                new SingleArgumentType<String>("Outline", "on|off", "on", "off") {
+                    @Override public String parse(String input, ParseResult parseResult) { return input.toLowerCase(); }
+                }
+            );
+        }
+
+        @Override
+        protected void execute(
+            @Nonnull CommandContext ctx,
+            @Nonnull Store<EntityStore> store,
+            @Nonnull Ref<EntityStore> ref,
+            @Nonnull PlayerRef playerRef,
+            @Nonnull World world
+        ) {
+            if (!StorageSubCommands.checkPermitted(playerRef)) return;
+            String state = stateArg.get(ctx);
+            if (!state.equals("on") && !state.equals("off")) {
+                playerRef.sendMessage(Message.raw("Invalid value. Use: on, off."));
+                return;
+            }
+            getSettings(store, ref, type).setStorageCountOutline(state.equals("on"));
+            playerRef.sendMessage(Message.raw("Storage panel count outline turned " + state + "."));
         }
     }
 

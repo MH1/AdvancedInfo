@@ -49,6 +49,7 @@ public class AdvancedInfo extends JavaPlugin {
 
         // Default grants are collected into virtual groups in PermissionsModule.start(), after every plugin setup.
         PermissionsModule.registerPermission(AdvancedInfoPermissions.HEALTH, HytalePermissionsProvider.GROUP_ADVENTURER);
+        PermissionsModule.registerPermission(AdvancedInfoPermissions.STORAGE, HytalePermissionsProvider.GROUP_ADVENTURER);
 
         entityStoreRegistry.registerSystem(new InfoUpdateSystem(infoManager, settingsComponentType));
         getCommandRegistry().registerCommand((AbstractCommand) new AdvancedInfoCommand(settingsComponentType));

@@ -89,7 +89,9 @@ public class InfoManager {
             && hud.getTargetBar().getMode()        == content.healthBarStyle()
             && hud.getHorizontalAlign()            == content.horizontalAlign()
             && hud.getVerticalAlign()              == content.verticalAlign()
-            && hud.getStyle().equals(content.style())) {
+            && hud.getStyle().equals(content.style())
+            && hud.isInfoVisible()                 == content.infoVisible()
+            && Objects.equals(hud.getStorage(),       content.storage())) {
             return;
         }
 

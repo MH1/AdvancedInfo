@@ -9,8 +9,12 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings.HorizontalAlign;
 import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings.VerticalAlign;
 
+import org.hlousek.hytale.plugin.advancedinfo.provider.StorageItem;
+
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.util.List;
+import java.util.Objects;
 
 public class InfoHud extends CustomUIHud {
 
@@ -19,6 +23,14 @@ public class InfoHud extends CustomUIHud {
 
     private static final String UI_PATH      = "AdvancedInfo/HUD/InfoHud.ui";
     private static final String CONTENT_SLOT = "#AIContent";
+    private static final String STORAGE_STACKED_SLOT = "#AIStorageStacked";
+    private static final String STORAGE_SOLO_SLOT    = "#AIStorageSolo";
+
+    /** Distance of a bottom-aligned panel from the screen edge, keeps it clear of the hotbar. */
+    private static final int BOTTOM_OFFSET = 130;
+
+    /** What the storage markup was rendered for; a change requires a re-render. */
+    private record StorageLayout(@Nonnull HudStyle style, int rows, boolean stacked) {}
 
     @Nullable private String timeText;
     @Nullable private String biomeText;
@@ -28,6 +40,9 @@ public class InfoHud extends CustomUIHud {
     private float targetHealthPct = -1f;
     private boolean targetEnabled = false;
     private boolean captionsEnabled = true;
+    private boolean infoVisible = true;
+    @Nullable private StoragePanel storage;
+    @Nullable private StorageLayout renderedStorage;
     @Nonnull private HorizontalAlign horizontalAlign = HorizontalAlign.LEFT;
     @Nonnull private VerticalAlign   verticalAlign   = VerticalAlign.TOP;
 
@@ -45,6 +60,7 @@ public class InfoHud extends CustomUIHud {
     protected void build(@Nonnull UICommandBuilder ui) {
         ui.append(UI_PATH);
         renderContent(ui);
+        renderStorage(ui);
         isBuilt = true;
         _update(ui);
     }
@@ -55,6 +71,7 @@ public class InfoHud extends CustomUIHud {
         if (!style.equals(renderedStyle)) {
             renderContent(ui);
         }
+        renderStorage(ui);
         _update(ui);
         update(false, ui);
     }
@@ -63,6 +80,7 @@ public class InfoHud extends CustomUIHud {
     protected void onRemove() {
         isBuilt = false;
         renderedStyle = null;
+        renderedStorage = null;
     }
 
     /**
@@ -80,6 +98,34 @@ public class InfoHud extends CustomUIHud {
         ui.setObject(CONTENT_SLOT + ".Background", background);
 
         renderedStyle = style;
+    }
+
+    /** Stacked below the info panel when both share the alignment, otherwise placed on its own. */
+    private boolean isStorageStacked() {
+        return storage != null && infoVisible
+            && storage.horizontalAlign() == horizontalAlign && storage.verticalAlign() == verticalAlign;
+    }
+
+    /**
+     * (Re)creates the storage cells when the style, the row limit or the placement changed.
+     * While no storage is targeted the rendered cells are kept and only hidden.
+     */
+    private void renderStorage(@Nonnull UICommandBuilder ui) {
+        if (storage == null) { return; }
+        StorageLayout wanted = new StorageLayout(style, storage.maxRows(), isStorageStacked());
+        if (wanted.equals(renderedStorage)) { return; }
+
+        if (renderedStorage != null) {
+            ui.clear(renderedStorage.stacked() ? STORAGE_STACKED_SLOT : STORAGE_SOLO_SLOT);
+        }
+        String slot = wanted.stacked() ? STORAGE_STACKED_SLOT : STORAGE_SOLO_SLOT;
+        ui.appendInline(slot, StoragePanelMarkup.render(style, wanted.rows(), style.storageItemsPerRow()));
+
+        PatchStyle background = new PatchStyle();
+        background.setColor(Value.of(style.backgroundColor()));
+        ui.setObject(slot + ".Background", background);
+
+        renderedStorage = wanted;
     }
 
     private void _update(@Nonnull UICommandBuilder ui) {
@@ -114,9 +160,65 @@ public class InfoHud extends CustomUIHud {
 
         Anchor offset = new Anchor();
         if (verticalAlign == VerticalAlign.BOTTOM) {
-            offset.setBottom(Value.of(130));
+            offset.setBottom(Value.of(BOTTOM_OFFSET));
         }
         ui.setObject("#AIOffset.Anchor", offset);
+        ui.set("#AIContent.Visible", infoVisible);
+
+        updateStorage(ui);
+    }
+
+    private void updateStorage(@Nonnull UICommandBuilder ui) {
+        boolean stacked = isStorageStacked();
+        ui.set(STORAGE_STACKED_SLOT + ".Visible", storage != null && stacked);
+        ui.set(STORAGE_SOLO_SLOT + ".Visible",    storage != null && !stacked);
+        if (storage == null || renderedStorage == null) { return; }
+
+        if (stacked) {
+            Anchor gap = new Anchor();
+            gap.setTop(Value.of(style.storagePanelGap()));
+            ui.setObject(STORAGE_STACKED_SLOT + ".Anchor", gap);
+        } else {
+            ui.set("#AISHud.LayoutMode", storage.verticalAlign() == VerticalAlign.BOTTOM ? "Bottom" : "Top");
+            ui.set("#AISInner.LayoutMode", switch (storage.horizontalAlign()) {
+                case LEFT   -> "Left";
+                case CENTER -> "Center";
+                case RIGHT  -> "Right";
+            });
+            Anchor offset = new Anchor();
+            if (storage.verticalAlign() == VerticalAlign.BOTTOM) {
+                offset.setBottom(Value.of(BOTTOM_OFFSET));
+            }
+            ui.setObject("#AISOffset.Anchor", offset);
+            Anchor width = new Anchor();
+            width.setWidth(Value.of(style.panelWidth()));
+            ui.setObject(STORAGE_SOLO_SLOT + ".Anchor", width);
+        }
+
+        List<StorageItem> items = storage.items();
+        int perRow   = style.storageItemsPerRow();
+        int capacity = renderedStorage.rows() * perRow;
+        boolean overflow = items.size() > capacity;
+        int shown = overflow ? capacity - 1 : items.size();
+        int usedCells = overflow ? capacity : shown;
+
+        ui.set(StoragePanelMarkup.EMPTY_ID + ".Visible", items.isEmpty());
+        for (int r = 0; r < renderedStorage.rows(); r++) {
+            ui.set(StoragePanelMarkup.rowId(r) + ".Visible", usedCells > r * perRow);
+        }
+        for (int i = 0; i < capacity; i++) {
+            ui.set(StoragePanelMarkup.cellId(i) + ".Visible", i < usedCells);
+            if (i < shown) {
+                StorageItem item = items.get(i);
+                ui.set(StoragePanelMarkup.iconId(i) + ".ItemId", item.itemId());
+                ui.set(StoragePanelMarkup.countId(i) + ".Text", StoragePanelMarkup.formatCount(item.count()));
+            }
+        }
+        int last = capacity - 1;
+        ui.set(StoragePanelMarkup.iconId(last) + ".Visible",  !overflow);
+        ui.set(StoragePanelMarkup.countId(last) + ".Visible", !overflow);
+        ui.set(StoragePanelMarkup.MORE_ID + ".Visible", overflow);
+        ui.set(StoragePanelMarkup.MORE_ID + ".Text", overflow ? "+" + (items.size() - shown) : "");
     }
 
     public void applyContent(@Nonnull HudContent content) {
@@ -131,6 +233,8 @@ public class InfoHud extends CustomUIHud {
         this.horizontalAlign  = content.horizontalAlign();
         this.verticalAlign    = content.verticalAlign();
         this.style            = content.style();
+        this.infoVisible      = content.infoVisible();
+        this.storage          = content.storage();
 
         targetBar.setFirstLine(content.targetText());
         targetBar.setSecondLine(content.targetSourceText());
@@ -155,6 +259,8 @@ public class InfoHud extends CustomUIHud {
     @Nullable public String getWorldTimeText() { return worldTimeText; }
     public boolean isTargetEnabled()           { return targetEnabled; }
     public boolean isCaptionsEnabled()         { return captionsEnabled; }
+    public boolean isInfoVisible()             { return infoVisible; }
+    @Nullable public StoragePanel getStorage() { return storage; }
     public float   getTargetHealthPct()        { return targetHealthPct; }
     @Nonnull public HudStyle getStyle()        { return style; }
     @Nonnull public HorizontalAlign getHorizontalAlign() { return horizontalAlign; }

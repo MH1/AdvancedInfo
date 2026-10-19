@@ -18,5 +18,8 @@ public final class AdvancedInfoPermissions {
     /** Seeing the target's health: the numbers next to its name and the health bar. */
     public static final String HEALTH = "advancedinfo.health";
 
+    /** Seeing the contents of the targeted storage block in the storage panel. */
+    public static final String STORAGE = "advancedinfo.storage";
+
     private AdvancedInfoPermissions() {}
 }

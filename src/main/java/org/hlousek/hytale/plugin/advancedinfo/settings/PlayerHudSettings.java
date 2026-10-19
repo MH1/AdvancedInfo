@@ -10,13 +10,16 @@ import java.time.ZoneId;
 
 public class PlayerHudSettings implements Component<EntityStore> {
 
-    private static final String CURRENT_VERSION = "1.1.1";
+    private static final String CURRENT_VERSION = "1.3.0";
 
     public enum HorizontalAlign { LEFT, CENTER, RIGHT }
     public enum VerticalAlign   { TOP, BOTTOM }
     public enum ProgressBarStyle { BELOW, OVERLAY }
     /** How the day is shown in the world-time row. */
     public enum WorldDayFormat { NONE, DAY_OF_YEAR, TOTAL_DAYS }
+
+    public static final int MIN_STORAGE_ROWS = 1;
+    public static final int MAX_STORAGE_ROWS = 6;
 
     private String version = "0.0.0";
     @Since(version = "1.0.0", defaultValue = "true")
@@ -53,6 +56,18 @@ public class PlayerHudSettings implements Component<EntityStore> {
     private int backgroundOpacity = 60;
     @Since(version = "1.1.1", defaultValue = "DAY_OF_YEAR")
     private String worldDayFormat = "DAY_OF_YEAR";
+    @Since(version = "1.3.0", defaultValue = "true")
+    private boolean storageEnabled = true;
+    @Since(version = "1.3.0", defaultValue = "LEFT")
+    private String storageHorizontalAlign = "LEFT";
+    @Since(version = "1.3.0", defaultValue = "TOP")
+    private String storageVerticalAlign = "TOP";
+    @Since(version = "1.3.0", defaultValue = "2")
+    private int storageMaxRows = 2;
+    @Since(version = "1.3.0", defaultValue = "18")
+    private int storageItemSize = 18;
+    @Since(version = "1.3.0", defaultValue = "true")
+    private boolean storageCountOutline = true;
 
     public PlayerHudSettings() {}
 
@@ -116,13 +131,45 @@ public class PlayerHudSettings implements Component<EntityStore> {
     }
     public void setVerticalAlign(VerticalAlign v) { this.verticalAlign = v.name(); }
 
+    /** Storage panel: contents of the targeted storage block. */
+    public boolean isStorageEnabled()            { return storageEnabled; }
+    public void setStorageEnabled(boolean v)     { this.storageEnabled = v; }
+
+    public HorizontalAlign getStorageHorizontalAlign() {
+        try { return HorizontalAlign.valueOf(storageHorizontalAlign); } catch (Exception e) { return HorizontalAlign.LEFT; }
+    }
+    public void setStorageHorizontalAlign(HorizontalAlign v) { this.storageHorizontalAlign = v.name(); }
+
+    public VerticalAlign getStorageVerticalAlign() {
+        try { return VerticalAlign.valueOf(storageVerticalAlign); } catch (Exception e) { return VerticalAlign.TOP; }
+    }
+    public void setStorageVerticalAlign(VerticalAlign v) { this.storageVerticalAlign = v.name(); }
+
+    /** Maximum number of item rows in the storage panel; the rest is summarised as "+N". */
+    public int getStorageMaxRows()           { return storageMaxRows; }
+    public void setStorageMaxRows(int v)     { this.storageMaxRows = v; }
+
+    /** Size of the storage item icons and counts, in the units of the font size (10-32). */
+    public int getStorageItemSize()          { return storageItemSize; }
+    public void setStorageItemSize(int v)    { this.storageItemSize = v; }
+
+    /** Black outline around the item counts in the storage panel. */
+    public boolean isStorageCountOutline()         { return storageCountOutline; }
+    public void setStorageCountOutline(boolean v)  { this.storageCountOutline = v; }
+
     public boolean isTimezoneSet() {
         return !timezone.equals(ZoneId.of("UTC"));
     }
 
     /** Called after deserialization to apply defaults for fields added in newer versions. */
     public void applyMigration() {
+        boolean storageIsNew = SettingsMigrator.compare(SettingsMigrator.parse(version), SettingsMigrator.parse("1.3.0")) < 0;
         SettingsMigrator.migrate(this, version, CURRENT_VERSION);
+        if (storageIsNew) {
+            // The storage panel starts where the player already keeps the info panel.
+            storageHorizontalAlign = horizontalAlign;
+            storageVerticalAlign   = verticalAlign;
+        }
         version = CURRENT_VERSION;
     }
 
@@ -152,6 +199,12 @@ public class PlayerHudSettings implements Component<EntityStore> {
         copy.timezoneOffsetVisible = this.timezoneOffsetVisible;
         copy.horizontalAlign       = this.horizontalAlign;
         copy.verticalAlign         = this.verticalAlign;
+        copy.storageEnabled         = this.storageEnabled;
+        copy.storageHorizontalAlign = this.storageHorizontalAlign;
+        copy.storageVerticalAlign   = this.storageVerticalAlign;
+        copy.storageMaxRows         = this.storageMaxRows;
+        copy.storageItemSize        = this.storageItemSize;
+        copy.storageCountOutline    = this.storageCountOutline;
         return copy;
     }
 
@@ -194,5 +247,17 @@ public class PlayerHudSettings implements Component<EntityStore> {
                 (c, v) -> c.horizontalAlign = v, c -> c.horizontalAlign).add()
             .append(new KeyedCodec<>("VerticalAlign",        Codec.STRING),
                 (c, v) -> c.verticalAlign = v, c -> c.verticalAlign).add()
+            .append(new KeyedCodec<>("StorageEnabled",       Codec.BOOLEAN),
+                (c, v) -> c.storageEnabled = v, c -> c.storageEnabled).add()
+            .append(new KeyedCodec<>("StorageHorizontalAlign", Codec.STRING),
+                (c, v) -> c.storageHorizontalAlign = v, c -> c.storageHorizontalAlign).add()
+            .append(new KeyedCodec<>("StorageVerticalAlign", Codec.STRING),
+                (c, v) -> c.storageVerticalAlign = v, c -> c.storageVerticalAlign).add()
+            .append(new KeyedCodec<>("StorageMaxRows",       Codec.INTEGER),
+                (c, v) -> c.storageMaxRows = v, c -> c.storageMaxRows).add()
+            .append(new KeyedCodec<>("StorageItemSize",      Codec.INTEGER),
+                (c, v) -> c.storageItemSize = v, c -> c.storageItemSize).add()
+            .append(new KeyedCodec<>("StorageCountOutline",  Codec.BOOLEAN),
+                (c, v) -> c.storageCountOutline = v, c -> c.storageCountOutline).add()
             .build();
 }

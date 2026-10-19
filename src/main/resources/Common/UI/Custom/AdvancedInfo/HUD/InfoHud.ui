@@ -2,7 +2,25 @@ Group #AIHud {
   Padding: (Full: 10);
   Group #AIInner {
     Group #AIOffset {
+      LayoutMode: Top;
       Group #AIContent {
+        Background: (Color: #000000(0.6));
+      }
+      // Storage panel in the same column as the info panel (same alignment); stretches to its width.
+      Group #AIStorageStacked {
+        Visible: false;
+        Background: (Color: #000000(0.6));
+      }
+    }
+  }
+}
+// Storage panel with its own alignment.
+Group #AISHud {
+  Padding: (Full: 10);
+  Group #AISInner {
+    Group #AISOffset {
+      Group #AIStorageSolo {
+        Visible: false;
         Background: (Color: #000000(0.6));
       }
     }

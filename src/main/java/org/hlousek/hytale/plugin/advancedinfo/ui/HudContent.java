@@ -7,7 +7,12 @@ import org.hlousek.hytale.plugin.advancedinfo.settings.PlayerHudSettings.Vertica
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
+/**
+ * @param infoVisible whether any row of the info panel is enabled
+ * @param storage     storage panel content; null while no storage block is targeted or the panel is off
+ */
 public record HudContent(
+    boolean infoVisible,
     @Nullable String timeText,
     @Nullable String biomeText,
     @Nullable String zoneText,
@@ -22,5 +27,6 @@ public record HudContent(
     @Nonnull ProgressBarStyle healthBarStyle,
     @Nonnull HorizontalAlign horizontalAlign,
     @Nonnull VerticalAlign verticalAlign,
-    @Nonnull HudStyle style
+    @Nonnull HudStyle style,
+    @Nullable StoragePanel storage
 ) {}

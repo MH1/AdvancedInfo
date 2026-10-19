@@ -33,6 +33,9 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
 
     private static final String UI_PATH = "AdvancedInfo/Pages/SettingsPage.ui";
 
+    /** Tab names; each has a {@code #Tab<Name>} button, {@code #Tab<Name>Mark} and {@code #Panel<Name>}. */
+    private static final List<String> TABS = List.of("Info", "Storage", "Display");
+
     /**
      * Curated list of common IANA timezone IDs shown in the dropdown.
      * "UTC" is always first and acts as the "no custom timezone" sentinel.
@@ -52,6 +55,8 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
 
     private final ComponentType<EntityStore, PlayerHudSettings> settingsType;
     private final Runnable onSettingsChanged;
+    /** Kept across {@code rebuild()} so RESET does not jump back to the first tab. */
+    private String activeTab = TABS.get(0);
 
     public SettingsPage(
         @Nonnull PlayerRef playerRef,
@@ -77,15 +82,31 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
         ui.append(UI_PATH);
 
         PlayerHudSettings s = getOrCreateSettings(ref, store);
-        applyState(ui, s, playerRef.hasPermission(AdvancedInfoPermissions.HEALTH));
+        boolean storageVisible = playerRef.hasPermission(AdvancedInfoPermissions.STORAGE);
+        if (!storageVisible && "Storage".equals(activeTab)) activeTab = TABS.get(0);
+
+        applyState(ui, s, playerRef.hasPermission(AdvancedInfoPermissions.HEALTH), storageVisible);
+        applyTab(ui, activeTab);
         bindEvents(events);
     }
 
-    private static void applyState(@Nonnull UICommandBuilder ui, @Nonnull PlayerHudSettings s, boolean healthVisible) {
+    private static void applyTab(@Nonnull UICommandBuilder ui, @Nonnull String active) {
+        for (String tab : TABS) {
+            boolean selected = tab.equals(active);
+            ui.set("#Panel" + tab + ".Visible",  selected);
+            ui.set("#Tab" + tab + "Mark.Visible", selected);
+        }
+    }
+
+    private static void applyState(
+        @Nonnull UICommandBuilder ui, @Nonnull PlayerHudSettings s, boolean healthVisible, boolean storageVisible
+    ) {
         // Hide what the server does not allow instead of offering a setting without effect.
         ui.set("#RowHealthBar.Visible",      healthVisible);
         ui.set("#HealthBarHeader.Visible",   healthVisible);
         ui.set("#HealthBarSection.Visible",  healthVisible);
+        ui.set("#TabStorageItem.Visible",    storageVisible);
+        ui.set("#TabStorageGap.Visible",     storageVisible);
 
         // Checkboxes - use .Value, not .Checked
         ui.set("#ChkTime.Value",           s.isTimeEnabled());
@@ -131,6 +152,17 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
         // Display sliders
         ui.set("#SlFontSize.Value", s.getFontSize());
         ui.set("#SlOpacity.Value",  s.getBackgroundOpacity());
+
+        // Storage panel
+        ui.set("#ChkStorage.Value",          s.isStorageEnabled());
+        ui.set("#StorageOptions.Visible",    s.isStorageEnabled());
+        ui.set("#DdStorageHAlign.Entries",   alignEntries("Left", "Center", "Right"));
+        ui.set("#DdStorageHAlign.Value",     capitalize(s.getStorageHorizontalAlign().name()));
+        ui.set("#DdStorageVAlign.Entries",   alignEntries("Top", "Bottom"));
+        ui.set("#DdStorageVAlign.Value",     capitalize(s.getStorageVerticalAlign().name()));
+        ui.set("#SlStorageMaxRows.Value",    s.getStorageMaxRows());
+        ui.set("#SlStorageItemSize.Value",   s.getStorageItemSize());
+        ui.set("#ChkStorageOutline.Value",   s.isStorageCountOutline());
     }
 
     private static List<DropdownEntryInfo> alignEntries(String... values) {
@@ -172,6 +204,15 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
         bindString(events, "#TfTimezone",        "set_timezone_text");
         bindNum   (events, "#SlFontSize",        "set_font_size");
         bindNum   (events, "#SlOpacity",         "set_opacity");
+        bindBool  (events, "#ChkStorage",        "toggle_storage");
+        bindString(events, "#DdStorageHAlign",   "set_storage_halign");
+        bindString(events, "#DdStorageVAlign",   "set_storage_valign");
+        bindNum   (events, "#SlStorageMaxRows",  "set_storage_max_rows");
+        bindNum   (events, "#SlStorageItemSize", "set_storage_item_size");
+        bindBool  (events, "#ChkStorageOutline", "toggle_storage_outline");
+        for (String tab : TABS) {
+            bindClick(events, "#Tab" + tab, "tab_" + tab);
+        }
         bindClick (events, "#BtnSave",           "save");
         bindClick (events, "#BtnReset",          "reset");
         bindClick (events, "#CloseBtn",          "close");
@@ -219,6 +260,18 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
         @Nonnull EventData data
     ) {
         if (data.action == null) return;
+
+        if (data.action.startsWith("tab_")) {
+            String tab = data.action.substring("tab_".length());
+            boolean permitted = !"Storage".equals(tab) || playerRef.hasPermission(AdvancedInfoPermissions.STORAGE);
+            if (TABS.contains(tab) && permitted && !tab.equals(activeTab)) {
+                activeTab = tab;
+                UICommandBuilder cmd = new UICommandBuilder();
+                applyTab(cmd, tab);
+                sendUpdate(cmd);
+            }
+            return;
+        }
 
         PlayerHudSettings settings = getOrCreateSettings(ref, store);
         String val = data.getEffectiveValue();
@@ -269,6 +322,34 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
                 try {
                     int percent = (int) Double.parseDouble(val);
                     if (percent >= HudStyle.MIN_OPACITY && percent <= HudStyle.MAX_OPACITY) settings.setBackgroundOpacity(percent);
+                } catch (NumberFormatException ignored) {}
+            }
+            case "toggle_storage" -> {
+                boolean on = Boolean.parseBoolean(val);
+                settings.setStorageEnabled(on);
+                UICommandBuilder cmd = new UICommandBuilder();
+                cmd.set("#StorageOptions.Visible", on);
+                sendUpdate(cmd);
+            }
+            case "set_storage_halign" -> {
+                HorizontalAlign h = parseHAlign(val);
+                if (h != null) settings.setStorageHorizontalAlign(h);
+            }
+            case "set_storage_valign" -> {
+                VerticalAlign v = parseVAlign(val);
+                if (v != null) settings.setStorageVerticalAlign(v);
+            }
+            case "set_storage_max_rows" -> {
+                try {
+                    int rows = (int) Double.parseDouble(val);
+                    if (rows >= PlayerHudSettings.MIN_STORAGE_ROWS && rows <= PlayerHudSettings.MAX_STORAGE_ROWS) settings.setStorageMaxRows(rows);
+                } catch (NumberFormatException ignored) {}
+            }
+            case "toggle_storage_outline" -> settings.setStorageCountOutline(Boolean.parseBoolean(val));
+            case "set_storage_item_size" -> {
+                try {
+                    int size = (int) Double.parseDouble(val);
+                    if (size >= HudStyle.MIN_STORAGE_ITEM_SIZE && size <= HudStyle.MAX_STORAGE_ITEM_SIZE) settings.setStorageItemSize(size);
                 } catch (NumberFormatException ignored) {}
             }
             case "save" -> {

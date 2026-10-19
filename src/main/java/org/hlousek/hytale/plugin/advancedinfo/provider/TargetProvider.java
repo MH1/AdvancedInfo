@@ -20,6 +20,9 @@ import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
 import com.hypixel.hytale.builtin.adventure.teleporter.component.Teleporter;
 import com.hypixel.hytale.builtin.crafting.component.BenchBlock;
+import com.hypixel.hytale.server.core.inventory.ItemStack;
+import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
+import com.hypixel.hytale.server.core.modules.block.components.ItemContainerBlock;
 import com.hypixel.hytale.builtin.path.entities.PatrolPathMarkerEntity;
 import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.server.core.universe.world.chunk.section.BlockComponentSection;
@@ -43,14 +46,26 @@ import java.util.List;
  * Resolves the entity or block the player is looking at.
  *
  * <p>Entities within {@link #RANGE} blocks are tested first by ray/AABB intersection;
- * when none is hit the targeted block is used instead.
+ * when none is hit the targeted block is used instead. A targeted storage block also
+ * reports its contents.
  */
 public final class TargetProvider {
 
     private static final double RANGE = 8.0;
 
+    @Nonnull private final StorageAccess storageAccess;
+
+    public TargetProvider(@Nonnull StorageAccess storageAccess) {
+        this.storageAccess = storageAccess;
+    }
+
     public boolean isEnabled(@Nonnull PlayerHudSettings settings) {
         return settings.isTargetEnabled();
+    }
+
+    /** Whether the storage panel needs the target even when the target row is hidden. */
+    public boolean isStorageEnabled(@Nonnull PlayerHudSettings settings, boolean storagePermitted) {
+        return storagePermitted && settings.isStorageEnabled();
     }
 
     @Nonnull
@@ -75,7 +90,7 @@ public final class TargetProvider {
         Ref<EntityStore> entity = findLookedAtEntity(store, playerEntityRef, eyePos, lookDir);
         TargetInfo info = entity != null ? describeEntity(ctx, store, entity) : null;
         if (info == null) {
-            info = describeTargetBlock(ctx, eyePos, lookDir);
+            info = describeTargetBlock(ctx, eyePos, lookDir, storageAccess);
         }
         return info != null ? info : TargetInfo.NONE;
     }
@@ -174,7 +189,9 @@ public final class TargetProvider {
     private record BlockHit(@Nonnull BlockType type, int x, int y, int z) {}
 
     @Nullable
-    private static TargetInfo describeTargetBlock(@Nonnull InfoContext ctx, @Nonnull Vector3d eyePos, @Nonnull Vector3d lookDir) {
+    private static TargetInfo describeTargetBlock(
+        @Nonnull InfoContext ctx, @Nonnull Vector3d eyePos, @Nonnull Vector3d lookDir, @Nonnull StorageAccess storageAccess
+    ) {
         World world = ctx.world();
         if (world == null) { return null; }
         ChunkStore chunkStore = world.getChunkStore();
@@ -183,11 +200,18 @@ public final class TargetProvider {
         if (hit == null) { return null; }
 
         String text = blockDisplayName(ctx.language(), hit.type());
-        String detail = blockEntityDetail(chunkStore, hit);
+        Ref<ChunkStore> blockRef = blockEntityRef(chunkStore, hit);
+        String detail = blockRef != null ? blockEntityDetail(chunkStore.getStore(), blockRef) : null;
         if (detail != null) {
             text = text + " [" + detail + "]";
         }
-        return finish(text, packOwnerOfBlock(hit.type().getId()), -1f);
+        List<StorageItem> storage = null;
+        if (blockRef != null && isStorage(chunkStore.getStore(), blockRef)
+            && storageAccess.canView(ctx.playerRef(), world, hit.x(), hit.z(), hit.type().getId())) {
+            storage = storageContents(chunkStore.getStore(), blockRef);
+        }
+        TargetInfo info = finish(text, packOwnerOfBlock(hit.type().getId()), -1f);
+        return new TargetInfo(info.text(), info.sourceText(), info.healthPct(), storage);
     }
 
     /**
@@ -235,12 +259,11 @@ public final class TargetProvider {
     }
 
     /**
-     * Extra information carried by the block's entity (bench tier, teleporter destination).
-     * Multi-block structures store the entity on their base block, so filler offsets are
-     * resolved first.
+     * The entity of the targeted block. Multi-block structures store the entity on their
+     * base block, so filler offsets are resolved first.
      */
     @Nullable
-    private static String blockEntityDetail(@Nonnull ChunkStore chunkStore, @Nonnull BlockHit hit) {
+    private static Ref<ChunkStore> blockEntityRef(@Nonnull ChunkStore chunkStore, @Nonnull BlockHit hit) {
         int x = hit.x(), y = hit.y(), z = hit.z();
         BlockSection section = blockSectionAt(chunkStore, x, y, z);
         if (section == null) { return null; }
@@ -258,8 +281,12 @@ public final class TargetProvider {
         BlockComponentSection components = store.getComponent(sectionRef, BlockComponentSection.getComponentType());
         if (components == null) { return null; }
         Ref<ChunkStore> blockRef = components.getBlockReference(ChunkUtil.indexBlock(x, y, z));
-        if (blockRef == null || !blockRef.isValid()) { return null; }
+        return blockRef != null && blockRef.isValid() ? blockRef : null;
+    }
 
+    /** Extra information carried by the block's entity (bench tier, teleporter destination). */
+    @Nullable
+    private static String blockEntityDetail(@Nonnull Store<ChunkStore> store, @Nonnull Ref<ChunkStore> blockRef) {
         BenchBlock bench = store.getComponent(blockRef, BenchBlock.getComponentType());
         if (bench != null) {
             return "Tier " + bench.getTierLevel();
@@ -270,6 +297,25 @@ public final class TargetProvider {
             if (teleporter.hasOwnedWarp())      { return teleporter.getOwnedWarp(); }
         }
         return null;
+    }
+
+    private static boolean isStorage(@Nonnull Store<ChunkStore> store, @Nonnull Ref<ChunkStore> blockRef) {
+        return store.getComponent(blockRef, ItemContainerBlock.getComponentType()) != null;
+    }
+
+    /** Summed contents of a storage block (chest, barrel, ...); null when the block stores nothing. */
+    @Nullable
+    private static List<StorageItem> storageContents(@Nonnull Store<ChunkStore> store, @Nonnull Ref<ChunkStore> blockRef) {
+        ItemContainerBlock containerBlock = store.getComponent(blockRef, ItemContainerBlock.getComponentType());
+        if (containerBlock == null) { return null; }
+        ItemContainer container = containerBlock.getItemContainer();
+        if (container == null) { return null; }
+
+        StorageItem.Summary summary = new StorageItem.Summary();
+        container.forEach((slot, stack) -> {
+            if (!ItemStack.isEmpty(stack)) { summary.add(stack.getItemId(), stack.getQuantity()); }
+        });
+        return summary.toList();
     }
 
     @Nonnull
@@ -342,7 +388,7 @@ public final class TargetProvider {
     private static TargetInfo finish(@Nullable String text, @Nullable String source, float healthPct) {
         if (isBlank(text)) { text = " "; }
         if (source == null || "Hytale".equals(source)) { source = " "; }
-        return new TargetInfo(text, source, healthPct);
+        return new TargetInfo(text, source, healthPct, null);
     }
 
     private static boolean isBlank(@Nullable String s) {
