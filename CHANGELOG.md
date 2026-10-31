@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.4.0 (2026-11-01)
+
+- The storage panel can be placed right above the crosshair with the vertical alignment `middle` (`/ai storage align <h> middle`, dropdown in the Storage tab). In that position it widens up to one and a half times the info panel width when the items do not fit into the configured rows.
+- The storage panel has its own background opacity (`/ai storage opacity <percent>`, slider in the Storage tab). It starts at the value of the info panel.
+- When a single item type fills a storage block (every slot holds a full stack of it), the storage panel shows `Full` instead of the count. It can be turned off with `/ai storage full off` or in the Storage tab of the settings UI.
+- Growing crops show their growth stage after the name, e.g. `Carrot [Stage 2/4]`; a fully grown crop shows no stage.
+- Bugfix: Blocks are targeted by their hitbox. Thin blocks such as torches, plants or fences no longer hide the block behind them; the target row and the storage panel now describe the block the crosshair actually points at.
+- Bugfix: Teleporter destinations in the target row keep the warp name as it was entered instead of all lower case.
+
 ## v1.3.0 (2026-10-19)
 
 - New storage panel: while looking at a storage block (chest, barrel, …) it lists the contents as item icons with total counts, largest first. It has its own alignment (shown below the info panel when both use the same one), is shown by default where the info panel is, and can be toggled with `/ai show storage` / `/ai hide storage`.

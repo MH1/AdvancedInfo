@@ -13,7 +13,9 @@ import javax.annotation.Nonnull;
  * it in {@link InfoHudMarkup} or {@link InfoHud#renderContent}; no templates
  * need to be generated.
  */
-public record HudStyle(int fontSize, int backgroundOpacity, int storageItemSize, boolean storageCountOutline) {
+public record HudStyle(
+    int fontSize, int backgroundOpacity, int storageItemSize, boolean storageCountOutline, int storageBackgroundOpacity
+) {
 
     public static final int MIN_FONT_SIZE     = 8;
     public static final int MAX_FONT_SIZE     = 32;
@@ -36,6 +38,12 @@ public record HudStyle(int fontSize, int backgroundOpacity, int storageItemSize,
         fontSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, fontSize));
         backgroundOpacity = Math.max(MIN_OPACITY, Math.min(MAX_OPACITY, backgroundOpacity));
         storageItemSize = Math.max(MIN_STORAGE_ITEM_SIZE, Math.min(MAX_STORAGE_ITEM_SIZE, storageItemSize));
+        storageBackgroundOpacity = Math.max(MIN_OPACITY, Math.min(MAX_OPACITY, storageBackgroundOpacity));
+    }
+
+    /** Storage panel with the info panel's opacity. */
+    public HudStyle(int fontSize, int backgroundOpacity, int storageItemSize, boolean storageCountOutline) {
+        this(fontSize, backgroundOpacity, storageItemSize, storageCountOutline, backgroundOpacity);
     }
 
     public HudStyle(int fontSize, int backgroundOpacity, int storageItemSize) {
@@ -49,16 +57,27 @@ public record HudStyle(int fontSize, int backgroundOpacity, int storageItemSize,
     @Nonnull
     public static HudStyle of(@Nonnull PlayerHudSettings settings) {
         return new HudStyle(settings.getFontSize(), settings.getBackgroundOpacity(), settings.getStorageItemSize(),
-            settings.isStorageCountOutline());
+            settings.isStorageCountOutline(), settings.getStorageBackgroundOpacity());
     }
 
     /**
-     * Background color as {@code #RRGGBBAA}. The runtime color converter only accepts
+     * Info panel background color as {@code #RRGGBBAA}. The runtime color converter only accepts
      * hex notation; the {@code #rrggbb(alpha)} form is document-parser syntax.
      */
     @Nonnull
     public String backgroundColor() {
-        int alpha = Math.round(backgroundOpacity * 255f / 100f);
+        return backgroundColor(backgroundOpacity);
+    }
+
+    /** Storage panel background color as {@code #RRGGBBAA}. */
+    @Nonnull
+    public String storageBackgroundColor() {
+        return backgroundColor(storageBackgroundOpacity);
+    }
+
+    @Nonnull
+    private static String backgroundColor(int opacityPercent) {
+        int alpha = Math.round(opacityPercent * 255f / 100f);
         return String.format("%s%02x", BACKGROUND_COLOR, alpha);
     }
 
@@ -109,9 +128,35 @@ public record HudStyle(int fontSize, int backgroundOpacity, int storageItemSize,
     /** Space between the info panel and a storage panel stacked below it. */
     public int storagePanelGap()      { return Math.max(2, scaled(6)); }
 
+    /** How far a middle-aligned storage panel may grow beyond the info panel width when its items overflow. */
+    public static final float STORAGE_MIDDLE_MAX_WIDTH = 1.5f;
+
     /** Item cells that fit next to each other in a storage panel as wide as the info panel. */
     public int storageItemsPerRow() {
-        int inner = panelWidth() - 2 * panelHorizontalPadding();
+        return storageItemsPerRow(panelWidth());
+    }
+
+    /** Item cells that fit next to each other in a storage panel of the given width. */
+    public int storageItemsPerRow(int panelWidth) {
+        int inner = panelWidth - 2 * panelHorizontalPadding();
         return Math.max(1, (inner + storageCellGap()) / (storageIconSize() + storageCellGap()));
+    }
+
+    /**
+     * Columns of a middle-aligned storage panel: the regular count, widened just enough for
+     * {@code itemCount} items in {@code maxRows} rows, at most {@link #STORAGE_MIDDLE_MAX_WIDTH} times the
+     * info panel width.
+     */
+    public int storageMiddleColumns(int itemCount, int maxRows) {
+        int regular = storageItemsPerRow();
+        int widest  = storageItemsPerRow(Math.round(panelWidth() * STORAGE_MIDDLE_MAX_WIDTH));
+        int needed  = maxRows > 0 ? (itemCount + maxRows - 1) / maxRows : regular;
+        return Math.max(regular, Math.min(needed, widest));
+    }
+
+    /** Width of a storage panel with {@code columns} cells per row; the info panel width unless it had to grow. */
+    public int storagePanelWidth(int columns) {
+        if (columns <= storageItemsPerRow()) { return panelWidth(); }
+        return 2 * panelHorizontalPadding() + columns * storageIconSize() + (columns - 1) * storageCellGap();
     }
 }

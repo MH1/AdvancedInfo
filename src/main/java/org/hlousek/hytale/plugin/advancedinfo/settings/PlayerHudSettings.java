@@ -10,10 +10,11 @@ import java.time.ZoneId;
 
 public class PlayerHudSettings implements Component<EntityStore> {
 
-    private static final String CURRENT_VERSION = "1.3.0";
+    private static final String CURRENT_VERSION = "1.4.0";
 
     public enum HorizontalAlign { LEFT, CENTER, RIGHT }
-    public enum VerticalAlign   { TOP, BOTTOM }
+    /** {@link #MIDDLE} places a panel right above the crosshair; only the storage panel offers it. */
+    public enum VerticalAlign   { TOP, MIDDLE, BOTTOM }
     public enum ProgressBarStyle { BELOW, OVERLAY }
     /** How the day is shown in the world-time row. */
     public enum WorldDayFormat { NONE, DAY_OF_YEAR, TOTAL_DAYS }
@@ -68,6 +69,10 @@ public class PlayerHudSettings implements Component<EntityStore> {
     private int storageItemSize = 18;
     @Since(version = "1.3.0", defaultValue = "true")
     private boolean storageCountOutline = true;
+    @Since(version = "1.4.0", defaultValue = "true")
+    private boolean storageFullLabel = true;
+    @Since(version = "1.4.0", defaultValue = "60")
+    private int storageBackgroundOpacity = 60;
 
     public PlayerHudSettings() {}
 
@@ -127,7 +132,10 @@ public class PlayerHudSettings implements Component<EntityStore> {
     public void setHorizontalAlign(HorizontalAlign v) { this.horizontalAlign = v.name(); }
 
     public VerticalAlign getVerticalAlign() {
-        try { return VerticalAlign.valueOf(verticalAlign); } catch (Exception e) { return VerticalAlign.TOP; }
+        try {
+            VerticalAlign v = VerticalAlign.valueOf(verticalAlign);
+            return v == VerticalAlign.MIDDLE ? VerticalAlign.TOP : v;
+        } catch (Exception e) { return VerticalAlign.TOP; }
     }
     public void setVerticalAlign(VerticalAlign v) { this.verticalAlign = v.name(); }
 
@@ -157,18 +165,32 @@ public class PlayerHudSettings implements Component<EntityStore> {
     public boolean isStorageCountOutline()         { return storageCountOutline; }
     public void setStorageCountOutline(boolean v)  { this.storageCountOutline = v; }
 
+    /** "Full" instead of the count in the storage panel when a single item type fills the block. */
+    public boolean isStorageFullLabel()            { return storageFullLabel; }
+    public void setStorageFullLabel(boolean v)     { this.storageFullLabel = v; }
+
+    /** Storage panel background opacity in percent (0-100), independent of the info panel. */
+    public int getStorageBackgroundOpacity()        { return storageBackgroundOpacity; }
+    public void setStorageBackgroundOpacity(int v)  { this.storageBackgroundOpacity = v; }
+
     public boolean isTimezoneSet() {
         return !timezone.equals(ZoneId.of("UTC"));
     }
 
     /** Called after deserialization to apply defaults for fields added in newer versions. */
     public void applyMigration() {
-        boolean storageIsNew = SettingsMigrator.compare(SettingsMigrator.parse(version), SettingsMigrator.parse("1.3.0")) < 0;
+        int[] saved = SettingsMigrator.parse(version);
+        boolean storageIsNew        = SettingsMigrator.compare(saved, SettingsMigrator.parse("1.3.0")) < 0;
+        boolean storageOpacityIsNew = SettingsMigrator.compare(saved, SettingsMigrator.parse("1.4.0")) < 0;
         SettingsMigrator.migrate(this, version, CURRENT_VERSION);
         if (storageIsNew) {
             // The storage panel starts where the player already keeps the info panel.
             storageHorizontalAlign = horizontalAlign;
             storageVerticalAlign   = verticalAlign;
+        }
+        if (storageOpacityIsNew) {
+            // The storage panel keeps the look the player had before it got its own opacity.
+            storageBackgroundOpacity = backgroundOpacity;
         }
         version = CURRENT_VERSION;
     }
@@ -205,6 +227,8 @@ public class PlayerHudSettings implements Component<EntityStore> {
         copy.storageMaxRows         = this.storageMaxRows;
         copy.storageItemSize        = this.storageItemSize;
         copy.storageCountOutline    = this.storageCountOutline;
+        copy.storageFullLabel       = this.storageFullLabel;
+        copy.storageBackgroundOpacity = this.storageBackgroundOpacity;
         return copy;
     }
 
@@ -259,5 +283,9 @@ public class PlayerHudSettings implements Component<EntityStore> {
                 (c, v) -> c.storageItemSize = v, c -> c.storageItemSize).add()
             .append(new KeyedCodec<>("StorageCountOutline",  Codec.BOOLEAN),
                 (c, v) -> c.storageCountOutline = v, c -> c.storageCountOutline).add()
+            .append(new KeyedCodec<>("StorageFullLabel",     Codec.BOOLEAN),
+                (c, v) -> c.storageFullLabel = v, c -> c.storageFullLabel).add()
+            .append(new KeyedCodec<>("StorageBackgroundOpacity", Codec.INTEGER),
+                (c, v) -> c.storageBackgroundOpacity = v, c -> c.storageBackgroundOpacity).add()
             .build();
 }

@@ -499,6 +499,8 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
                 sb.append("\n  storage rows: ").append(settings.getStorageMaxRows());
                 sb.append("\n  storage item size: ").append(settings.getStorageItemSize());
                 sb.append("\n  storage count outline: ").append(settings.isStorageCountOutline() ? "on" : "off");
+                sb.append("\n  storage full label: ").append(settings.isStorageFullLabel() ? "on" : "off");
+                sb.append("\n  storage background opacity: ").append(settings.getStorageBackgroundOpacity()).append("%");
             }
             sb.append("\n  font size: ").append(settings.getFontSize());
             sb.append("\n  background opacity: ").append(settings.getBackgroundOpacity()).append("%");
@@ -609,7 +611,7 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
         private final RequiredArg<String> percentArg;
 
         public OpacitySubCommand(@Nonnull ComponentType<EntityStore, PlayerHudSettings> type) {
-            super("opacity", "Set the panel background opacity in percent (" + MIN + "-" + MAX + ").");
+            super("opacity", "Set the info panel background opacity in percent (" + MIN + "-" + MAX + ").");
             this.type = type;
             this.percentArg = withRequiredArg(
                 "percent", "Background opacity",
@@ -644,7 +646,7 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
     }
 
     // -------------------------------------------------------------------------
-    // /ai storage align <h> <v> | rows <n> | size <n> | outline <on|off>
+    // /ai storage align <h> <v> | rows <n> | size <n> | outline <on|off> | full <on|off> | opacity <percent>
     // -------------------------------------------------------------------------
 
     private static class StorageSubCommands extends AbstractCommandCollection {
@@ -655,6 +657,8 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
             addSubCommand(new StorageRowsSubCommand(type));
             addSubCommand(new StorageSizeSubCommand(type));
             addSubCommand(new StorageOutlineSubCommand(type));
+            addSubCommand(new StorageFullSubCommand(type));
+            addSubCommand(new StorageOpacitySubCommand(type));
         }
 
         /** Storage settings stay hidden from players the server denies the storage panel. */
@@ -672,7 +676,7 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
         private final RequiredArg<String> vArg;
 
         public StorageAlignSubCommand(@Nonnull ComponentType<EntityStore, PlayerHudSettings> type) {
-            super("align", "Set the storage panel alignment: /ai storage align <left|center|right> <top|bottom>.");
+            super("align", "Set the storage panel alignment: /ai storage align <left|center|right> <top|middle|bottom>; middle places it above the crosshair.");
             this.type = type;
             this.hArg = withRequiredArg(
                 "horizontal", "Horizontal alignment",
@@ -682,7 +686,7 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
             );
             this.vArg = withRequiredArg(
                 "vertical", "Vertical alignment",
-                new SingleArgumentType<String>("Vertical", "top|bottom", "top", "bottom") {
+                new SingleArgumentType<String>("Vertical", "top|middle|bottom", "top", "middle", "bottom") {
                     @Override public String parse(String input, ParseResult parseResult) { return input.toLowerCase(); }
                 }
             );
@@ -698,9 +702,9 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
         ) {
             if (!StorageSubCommands.checkPermitted(playerRef)) return;
             HorizontalAlign h = parseHorizontal(hArg.get(ctx));
-            VerticalAlign   v = parseVertical(vArg.get(ctx));
+            VerticalAlign   v = "middle".equals(vArg.get(ctx)) ? VerticalAlign.MIDDLE : parseVertical(vArg.get(ctx));
             if (h == null) { playerRef.sendMessage(Message.raw("Invalid horizontal alignment. Use: left, center, right.")); return; }
-            if (v == null) { playerRef.sendMessage(Message.raw("Invalid vertical alignment. Use: top, bottom.")); return; }
+            if (v == null) { playerRef.sendMessage(Message.raw("Invalid vertical alignment. Use: top, middle, bottom.")); return; }
             PlayerHudSettings settings = getSettings(store, ref, type);
             settings.setStorageHorizontalAlign(h);
             settings.setStorageVerticalAlign(v);
@@ -828,6 +832,85 @@ public class AdvancedInfoCommand extends AbstractCommandCollection {
             }
             getSettings(store, ref, type).setStorageCountOutline(state.equals("on"));
             playerRef.sendMessage(Message.raw("Storage panel count outline turned " + state + "."));
+        }
+    }
+
+    private static class StorageFullSubCommand extends AbstractPlayerCommand {
+
+        private final ComponentType<EntityStore, PlayerHudSettings> type;
+        private final RequiredArg<String> stateArg;
+
+        public StorageFullSubCommand(@Nonnull ComponentType<EntityStore, PlayerHudSettings> type) {
+            super("full", "Show \"Full\" instead of the count in the storage panel when a single item type fills the block.");
+            this.type = type;
+            this.stateArg = withRequiredArg(
+                "state", "Full label",
+                new SingleArgumentType<String>("Full", "on|off", "on", "off") {
+                    @Override public String parse(String input, ParseResult parseResult) { return input.toLowerCase(); }
+                }
+            );
+        }
+
+        @Override
+        protected void execute(
+            @Nonnull CommandContext ctx,
+            @Nonnull Store<EntityStore> store,
+            @Nonnull Ref<EntityStore> ref,
+            @Nonnull PlayerRef playerRef,
+            @Nonnull World world
+        ) {
+            if (!StorageSubCommands.checkPermitted(playerRef)) return;
+            String state = stateArg.get(ctx);
+            if (!state.equals("on") && !state.equals("off")) {
+                playerRef.sendMessage(Message.raw("Invalid value. Use: on, off."));
+                return;
+            }
+            getSettings(store, ref, type).setStorageFullLabel(state.equals("on"));
+            playerRef.sendMessage(Message.raw("Storage panel full label turned " + state + "."));
+        }
+    }
+
+    private static class StorageOpacitySubCommand extends AbstractPlayerCommand {
+
+        private static final int MIN = HudStyle.MIN_OPACITY;
+        private static final int MAX = HudStyle.MAX_OPACITY;
+
+        private final ComponentType<EntityStore, PlayerHudSettings> type;
+        private final RequiredArg<String> percentArg;
+
+        public StorageOpacitySubCommand(@Nonnull ComponentType<EntityStore, PlayerHudSettings> type) {
+            super("opacity", "Set the storage panel background opacity in percent (" + MIN + "-" + MAX + ").");
+            this.type = type;
+            this.percentArg = withRequiredArg(
+                "percent", "Background opacity",
+                new SingleArgumentType<String>("Opacity", "Integer between " + MIN + " and " + MAX, String.valueOf(HudStyle.DEFAULT_OPACITY)) {
+                    @Override public String parse(String input, ParseResult parseResult) { return input; }
+                }
+            );
+        }
+
+        @Override
+        protected void execute(
+            @Nonnull CommandContext ctx,
+            @Nonnull Store<EntityStore> store,
+            @Nonnull Ref<EntityStore> ref,
+            @Nonnull PlayerRef playerRef,
+            @Nonnull World world
+        ) {
+            if (!StorageSubCommands.checkPermitted(playerRef)) return;
+            int percent;
+            try {
+                percent = Integer.parseInt(percentArg.get(ctx).replace("%", ""));
+            } catch (NumberFormatException e) {
+                playerRef.sendMessage(Message.raw("Invalid opacity. Use a number between " + MIN + " and " + MAX + "."));
+                return;
+            }
+            if (percent < MIN || percent > MAX) {
+                playerRef.sendMessage(Message.raw("Opacity must be between " + MIN + " and " + MAX + "."));
+                return;
+            }
+            getSettings(store, ref, type).setStorageBackgroundOpacity(percent);
+            playerRef.sendMessage(Message.raw("Storage panel background opacity set to " + percent + "%."));
         }
     }
 

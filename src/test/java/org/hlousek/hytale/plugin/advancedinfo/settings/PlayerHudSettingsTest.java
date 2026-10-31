@@ -57,12 +57,69 @@ class PlayerHudSettingsTest {
     }
 
     @Test
+    void migrationFrom130AddsFullLabelDefault() throws Exception {
+        PlayerHudSettings s = new PlayerHudSettings();
+        s.setStorageFullLabel(false);
+        setVersion(s, "1.3.0");
+
+        s.applyMigration();
+
+        assertTrue(s.isStorageFullLabel());
+    }
+
+    @Test
+    void migrationFrom130GivesTheStoragePanelTheInfoPanelOpacity() throws Exception {
+        PlayerHudSettings s = new PlayerHudSettings();
+        s.setBackgroundOpacity(25);
+        setVersion(s, "1.3.0");
+
+        s.applyMigration();
+
+        assertEquals(25, s.getStorageBackgroundOpacity());
+    }
+
+    @Test
+    void migrationFrom140KeepsStorageOpacity() throws Exception {
+        PlayerHudSettings s = new PlayerHudSettings();
+        s.setBackgroundOpacity(25);
+        s.setStorageBackgroundOpacity(80);
+        setVersion(s, "1.4.0");
+
+        s.applyMigration();
+
+        assertEquals(80, s.getStorageBackgroundOpacity());
+    }
+
+    @Test
+    void migrationFrom140KeepsFullLabel() throws Exception {
+        PlayerHudSettings s = new PlayerHudSettings();
+        s.setStorageFullLabel(false);
+        setVersion(s, "1.4.0");
+
+        s.applyMigration();
+
+        assertFalse(s.isStorageFullLabel());
+    }
+
+    @Test
+    void middleIsOnlyOfferedToTheStoragePanel() {
+        PlayerHudSettings s = new PlayerHudSettings();
+        s.setStorageVerticalAlign(VerticalAlign.MIDDLE);
+        s.setVerticalAlign(VerticalAlign.MIDDLE);
+
+        assertEquals(VerticalAlign.MIDDLE, s.getStorageVerticalAlign());
+        assertEquals(VerticalAlign.TOP, s.getVerticalAlign(), "the info panel never sits in the middle");
+    }
+
+    @Test
     void cloneCopiesStorageSettings() {
         PlayerHudSettings s = new PlayerHudSettings();
         s.setStorageEnabled(false);
         s.setStorageHorizontalAlign(HorizontalAlign.RIGHT);
         s.setStorageVerticalAlign(VerticalAlign.BOTTOM);
         s.setStorageMaxRows(4);
+        s.setStorageFullLabel(false);
+        s.setStorageBackgroundOpacity(15);
 
         PlayerHudSettings copy = (PlayerHudSettings) s.clone();
 
@@ -70,6 +127,8 @@ class PlayerHudSettingsTest {
         assertEquals(HorizontalAlign.RIGHT, copy.getStorageHorizontalAlign());
         assertEquals(VerticalAlign.BOTTOM, copy.getStorageVerticalAlign());
         assertEquals(4, copy.getStorageMaxRows());
+        assertFalse(copy.isStorageFullLabel());
+        assertEquals(15, copy.getStorageBackgroundOpacity());
     }
 
     private static void setVersion(PlayerHudSettings s, String version) throws Exception {

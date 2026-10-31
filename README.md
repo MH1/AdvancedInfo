@@ -1,6 +1,6 @@
 # AdvancedInfo
 
-A Hytale server plugin that displays a configurable information HUD with real-time data about the player's surroundings and current target.
+A highly customizable Hytale server plugin that adds a real-time information HUD to your screen. Keep track of your exact coordinates, current biome and world time, inspect targets with dynamic health bars and see what a chest holds without opening it - all fully configurable per player.
 
 The panel is registered as its own keyed HUD, so it coexists with other mods' custom HUDs.
 
@@ -14,20 +14,32 @@ The panel is registered as its own keyed HUD, so it coexists with other mods' cu
 - **World Time** - the in-game world time.
 - **Zone** - the zone and tier the player is currently in.
 - **Target** - the name and health of the entity or block the player is looking at, with an optional health bar.
+  Crafting benches add their tier, teleporters their destination warp and growing crops their growth stage in
+  brackets, e.g. `Workbench [Tier 2]` or `Carrot [Stage 2/4]`; a fully grown crop shows no stage.
 - **Captions** - labels shown next to each HUD value.
 - **Timezone Offset** - the UTC offset of the active timezone shown next to the time (hidden by default; requires a timezone to be set).
 
 ## Storage Panel
 
+No more opening chests one by one: aim at a storage block and you instantly see what is inside.
+
+![Storage panel above the crosshair](docs/images/preview4.png)
+
 A second panel that appears while the player looks at a storage block (chest, barrel, …) and lists
 its contents: one icon per item type with the total count, sorted from the largest count to the smallest.
 
 - Has its own alignment, independent of the info panel; with the same alignment it is shown below the info panel.
+  The vertical position `middle` places it right above the crosshair, where the game shows its interaction prompt.
+  In the middle position the panel widens when the items do not fit into the configured rows, up to one and a half
+  times the info panel width.
 - By default it is shown and placed where the info panel is.
-- Uses the width and background opacity of the info panel. The size of the item icons and counts has its own
-  setting (`/ai storage size`), which only changes how many items fit in a row.
+- Uses the width of the info panel. The background opacity (`/ai storage opacity`, starts at the info panel's value)
+  and the size of the item icons and counts (`/ai storage size`, only changes how many items fit in a row) have
+  their own settings.
 - The counts have a black outline for readability on light icons; it can be turned off (`/ai storage outline off`).
 - The number of item rows is limited (`/ai storage rows`); further items are summarised as `+N`.
+- When a single item type fills the block (every slot holds a full stack of it), `Full` is shown instead of
+  the count; it can be turned off (`/ai storage full off`).
 - With the SimpleClaims mod installed, the contents of a storage block in a claimed chunk are only shown to
   players who may open it there.
 
@@ -50,8 +62,8 @@ Run `/ai ui` to open the in-game settings page. It configures all options withou
   - **Alignment** - choose horizontal (`left`, `center`, `right`) and vertical (`top`, `bottom`) position.
   - **Time** - switch between 12-hour and 24-hour format, select a timezone from a dropdown, or type any IANA timezone ID directly, and choose how the world day is shown (hidden, day of the year, total days).
   - **Target Health Bar** - choose the display style (`overlay` or `below`).
-- **Storage** - the storage panel: show or hide it, its alignment, the maximum number of item rows (1-6), the item size (10-32) and the outline around the counts.
-- **Display** - sliders for the font size (8-32) and the panel background opacity (0-100 %), shared by both panels.
+- **Storage** - the storage panel: show or hide it, its alignment, the maximum number of item rows (1-6), the item size (10-32), its background opacity (0-100 %), the outline around the counts and the `Full` label.
+- **Display** - sliders for the font size (8-32), shared by both panels, and the info panel background opacity (0-100 %).
 
 Use **SAVE** to apply and close, **RESET DEFAULTS** to restore all settings, or **Close** to discard unsaved changes.
 
@@ -81,11 +93,13 @@ All commands use `/advanced-info` or the alias `/ai`.
 | `/ai valign <top\|bottom>` | Set the vertical alignment of the HUD panel. |
 | `/ai healthbar <below\|overlay>` | Set the health bar display style. |
 | `/ai font <size>` | Set the font size of the HUD labels (range: 8-32, default: 18). |
-| `/ai opacity <percent>` | Set the panel background opacity (range: 0-100, default: 60). |
-| `/ai storage align <h> <v>` | Set the horizontal and vertical alignment of the storage panel. |
+| `/ai opacity <percent>` | Set the info panel background opacity (range: 0-100, default: 60). |
+| `/ai storage align <h> <v>` | Set the horizontal (`left`, `center`, `right`) and vertical (`top`, `middle`, `bottom`) alignment of the storage panel; `middle` places it right above the crosshair. |
 | `/ai storage rows <n>` | Set the maximum number of item rows in the storage panel (range: 1-6, default: 2). |
 | `/ai storage size <n>` | Set the size of the item icons and counts in the storage panel (range: 10-32, default: 18). |
 | `/ai storage outline <on\|off>` | Turn the black outline around the item counts in the storage panel on or off (default: on). |
+| `/ai storage full <on\|off>` | Show `Full` instead of the count when a single item type fills the block (default: on). |
+| `/ai storage opacity <percent>` | Set the storage panel background opacity (range: 0-100, default: the info panel's value). |
 | `/ai status` | Print the current visibility and configuration of all HUD elements. |
 | `/ai reset` | Reset all settings to their default values. |
 

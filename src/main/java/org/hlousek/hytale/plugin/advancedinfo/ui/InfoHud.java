@@ -23,14 +23,31 @@ public class InfoHud extends CustomUIHud {
 
     private static final String UI_PATH      = "AdvancedInfo/HUD/InfoHud.ui";
     private static final String CONTENT_SLOT = "#AIContent";
-    private static final String STORAGE_STACKED_SLOT = "#AIStorageStacked";
-    private static final String STORAGE_SOLO_SLOT    = "#AIStorageSolo";
 
     /** Distance of a bottom-aligned panel from the screen edge, keeps it clear of the hotbar. */
     private static final int BOTTOM_OFFSET = 130;
 
+    /**
+     * Distance between the crosshair and a middle-aligned storage panel, about the distance at which the
+     * client shows its interaction prompt below the crosshair.
+     */
+    private static final int CROSSHAIR_GAP = 40;
+
+    /** Where the storage panel lives in the skeleton; each slot has its own alignment containers. */
+    private enum StorageSlot {
+        /** Below the info panel, in its column. */
+        STACKED("#AIStorageStacked"),
+        /** Own alignment at the screen edges. */
+        SOLO("#AIStorageSolo"),
+        /** Right above the crosshair. */
+        MIDDLE("#AIStorageMiddle");
+
+        final String id;
+        StorageSlot(String id) { this.id = id; }
+    }
+
     /** What the storage markup was rendered for; a change requires a re-render. */
-    private record StorageLayout(@Nonnull HudStyle style, int rows, boolean stacked) {}
+    private record StorageLayout(@Nonnull HudStyle style, int rows, int columns, @Nonnull StorageSlot slot) {}
 
     @Nullable private String timeText;
     @Nullable private String biomeText;
@@ -100,10 +117,19 @@ public class InfoHud extends CustomUIHud {
         renderedStyle = style;
     }
 
-    /** Stacked below the info panel when both share the alignment, otherwise placed on its own. */
-    private boolean isStorageStacked() {
-        return storage != null && infoVisible
+    /** Above the crosshair for {@code middle}; stacked below the info panel when both share the alignment; otherwise on its own. */
+    private StorageSlot storageSlot() {
+        if (storage == null) { return StorageSlot.SOLO; }
+        if (storage.verticalAlign() == VerticalAlign.MIDDLE) { return StorageSlot.MIDDLE; }
+        boolean stacked = infoVisible
             && storage.horizontalAlign() == horizontalAlign && storage.verticalAlign() == verticalAlign;
+        return stacked ? StorageSlot.STACKED : StorageSlot.SOLO;
+    }
+
+    /** Cells per row; only the middle-aligned panel grows when its items overflow the rows. */
+    private int storageColumns(@Nonnull StorageSlot slot) {
+        if (storage == null || slot != StorageSlot.MIDDLE) { return style.storageItemsPerRow(); }
+        return style.storageMiddleColumns(storage.items().size(), storage.maxRows());
     }
 
     /**
@@ -112,18 +138,18 @@ public class InfoHud extends CustomUIHud {
      */
     private void renderStorage(@Nonnull UICommandBuilder ui) {
         if (storage == null) { return; }
-        StorageLayout wanted = new StorageLayout(style, storage.maxRows(), isStorageStacked());
+        StorageSlot slot = storageSlot();
+        StorageLayout wanted = new StorageLayout(style, storage.maxRows(), storageColumns(slot), slot);
         if (wanted.equals(renderedStorage)) { return; }
 
         if (renderedStorage != null) {
-            ui.clear(renderedStorage.stacked() ? STORAGE_STACKED_SLOT : STORAGE_SOLO_SLOT);
+            ui.clear(renderedStorage.slot().id);
         }
-        String slot = wanted.stacked() ? STORAGE_STACKED_SLOT : STORAGE_SOLO_SLOT;
-        ui.appendInline(slot, StoragePanelMarkup.render(style, wanted.rows(), style.storageItemsPerRow()));
+        ui.appendInline(slot.id, StoragePanelMarkup.render(style, wanted.rows(), wanted.columns()));
 
         PatchStyle background = new PatchStyle();
-        background.setColor(Value.of(style.backgroundColor()));
-        ui.setObject(slot + ".Background", background);
+        background.setColor(Value.of(style.storageBackgroundColor()));
+        ui.setObject(slot.id + ".Background", background);
 
         renderedStorage = wanted;
     }
@@ -152,11 +178,7 @@ public class InfoHud extends CustomUIHud {
         targetBar.apply(ui);
 
         ui.set("#AIHud.LayoutMode", verticalAlign == VerticalAlign.BOTTOM ? "Bottom" : "Top");
-        ui.set("#AIInner.LayoutMode", switch (horizontalAlign) {
-            case LEFT   -> "Left";
-            case CENTER -> "Center";
-            case RIGHT  -> "Right";
-        });
+        ui.set("#AIInner.LayoutMode", layoutMode(horizontalAlign));
 
         Anchor offset = new Anchor();
         if (verticalAlign == VerticalAlign.BOTTOM) {
@@ -169,34 +191,43 @@ public class InfoHud extends CustomUIHud {
     }
 
     private void updateStorage(@Nonnull UICommandBuilder ui) {
-        boolean stacked = isStorageStacked();
-        ui.set(STORAGE_STACKED_SLOT + ".Visible", storage != null && stacked);
-        ui.set(STORAGE_SOLO_SLOT + ".Visible",    storage != null && !stacked);
+        StorageSlot active = storageSlot();
+        for (StorageSlot slot : StorageSlot.values()) {
+            ui.set(slot.id + ".Visible", storage != null && slot == active);
+        }
         if (storage == null || renderedStorage == null) { return; }
 
-        if (stacked) {
-            Anchor gap = new Anchor();
-            gap.setTop(Value.of(style.storagePanelGap()));
-            ui.setObject(STORAGE_STACKED_SLOT + ".Anchor", gap);
-        } else {
-            ui.set("#AISHud.LayoutMode", storage.verticalAlign() == VerticalAlign.BOTTOM ? "Bottom" : "Top");
-            ui.set("#AISInner.LayoutMode", switch (storage.horizontalAlign()) {
-                case LEFT   -> "Left";
-                case CENTER -> "Center";
-                case RIGHT  -> "Right";
-            });
-            Anchor offset = new Anchor();
-            if (storage.verticalAlign() == VerticalAlign.BOTTOM) {
-                offset.setBottom(Value.of(BOTTOM_OFFSET));
+        switch (active) {
+            case STACKED -> {
+                Anchor gap = new Anchor();
+                gap.setTop(Value.of(style.storagePanelGap()));
+                ui.setObject(StorageSlot.STACKED.id + ".Anchor", gap);
             }
-            ui.setObject("#AISOffset.Anchor", offset);
-            Anchor width = new Anchor();
-            width.setWidth(Value.of(style.panelWidth()));
-            ui.setObject(STORAGE_SOLO_SLOT + ".Anchor", width);
+            case SOLO -> {
+                ui.set("#AISHud.LayoutMode", storage.verticalAlign() == VerticalAlign.BOTTOM ? "Bottom" : "Top");
+                ui.set("#AISInner.LayoutMode", layoutMode(storage.horizontalAlign()));
+                Anchor offset = new Anchor();
+                if (storage.verticalAlign() == VerticalAlign.BOTTOM) {
+                    offset.setBottom(Value.of(BOTTOM_OFFSET));
+                }
+                ui.setObject("#AISOffset.Anchor", offset);
+                Anchor width = new Anchor();
+                width.setWidth(Value.of(style.panelWidth()));
+                ui.setObject(StorageSlot.SOLO.id + ".Anchor", width);
+            }
+            case MIDDLE -> {
+                ui.set("#AISMidInner.LayoutMode", layoutMode(storage.horizontalAlign()));
+                Anchor offset = new Anchor();
+                offset.setBottom(Value.of(CROSSHAIR_GAP));
+                ui.setObject("#AISMidOffset.Anchor", offset);
+                Anchor width = new Anchor();
+                width.setWidth(Value.of(style.storagePanelWidth(renderedStorage.columns())));
+                ui.setObject(StorageSlot.MIDDLE.id + ".Anchor", width);
+            }
         }
 
         List<StorageItem> items = storage.items();
-        int perRow   = style.storageItemsPerRow();
+        int perRow   = renderedStorage.columns();
         int capacity = renderedStorage.rows() * perRow;
         boolean overflow = items.size() > capacity;
         int shown = overflow ? capacity - 1 : items.size();
@@ -211,7 +242,8 @@ public class InfoHud extends CustomUIHud {
             if (i < shown) {
                 StorageItem item = items.get(i);
                 ui.set(StoragePanelMarkup.iconId(i) + ".ItemId", item.itemId());
-                ui.set(StoragePanelMarkup.countId(i) + ".Text", StoragePanelMarkup.formatCount(item.count()));
+                ui.set(StoragePanelMarkup.countId(i) + ".Text",
+                    storage.full() ? "Full" : StoragePanelMarkup.formatCount(item.count()));
             }
         }
         int last = capacity - 1;
@@ -219,6 +251,14 @@ public class InfoHud extends CustomUIHud {
         ui.set(StoragePanelMarkup.countId(last) + ".Visible", !overflow);
         ui.set(StoragePanelMarkup.MORE_ID + ".Visible", overflow);
         ui.set(StoragePanelMarkup.MORE_ID + ".Text", overflow ? "+" + (items.size() - shown) : "");
+    }
+
+    private static String layoutMode(@Nonnull HorizontalAlign align) {
+        return switch (align) {
+            case LEFT   -> "Left";
+            case CENTER -> "Center";
+            case RIGHT  -> "Right";
+        };
     }
 
     public void applyContent(@Nonnull HudContent content) {

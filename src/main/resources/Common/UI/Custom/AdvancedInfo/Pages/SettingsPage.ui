@@ -216,8 +216,8 @@ $C.@PageOverlay {
               Label { Text: "Vertical"; Style: @FieldLabelStyle; FlexWeight: 1; }
               $C.@DropdownBox #DdStorageVAlign { Anchor: (Width: 200, Height: 28); }
             }
-            Group { Anchor: (Top: 6, Height: 36);
-              Label { Text: "With the same alignment as Info, the storage panel is shown below it."; Style: @NoteLabelStyle; }
+            Group { Anchor: (Top: 6, Height: 40);
+              Label { Text: "With the same alignment as Info, the storage panel is shown below it. Middle places it right above the crosshair."; Style: @NoteLabelStyle; }
             }
           }
 
@@ -237,7 +237,12 @@ $C.@PageOverlay {
               Label { Text: "Item size"; Style: @FieldLabelStyle; FlexWeight: 1; }
               $C.@SliderNumberField #SlStorageItemSize { @Anchor = (Width: 260); Min: 10; Max: 32; Step: 1; Value: 18; }
             }
+            @FieldRow {
+              Label { Text: "Background Opacity (%)"; Style: @FieldLabelStyle; FlexWeight: 1; }
+              $C.@SliderNumberField #SlStorageOpacity { @Anchor = (Width: 260); Min: 0; Max: 100; Step: 1; Value: 60; }
+            }
             @CheckboxRow { $C.@CheckBox #ChkStorageOutline { } Label { Text: "Outline around item counts"; Style: @RowLabelStyle; Anchor: (Left: 10); } }
+            @CheckboxRow { $C.@CheckBox #ChkStorageFull { } Label { Text: "Show Full instead of the count when one item fills the block"; Style: @RowLabelStyle; Anchor: (Left: 10); } }
           }
         }
       }
@@ -264,8 +269,8 @@ $C.@PageOverlay {
             Label { Text: "Background Opacity (%)"; Style: @FieldLabelStyle; FlexWeight: 1; }
             $C.@SliderNumberField #SlOpacity { @Anchor = (Width: 260); Min: 0; Max: 100; Step: 1; Value: 60; }
           }
-          Group { Anchor: (Top: 6, Height: 20);
-            Label { Text: "Applies to the Info and Storage panels."; Style: @NoteLabelStyle; }
+          Group { Anchor: (Top: 6, Height: 36);
+            Label { Text: "The font size applies to both panels. The storage panel has its own background opacity in the Storage tab."; Style: @NoteLabelStyle; }
           }
         }
       }

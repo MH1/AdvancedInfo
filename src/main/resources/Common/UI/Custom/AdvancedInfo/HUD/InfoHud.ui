@@ -26,3 +26,24 @@ Group #AISHud {
     }
   }
 }
+// Storage panel right above the crosshair: the two halves share the height, so the upper one ends
+// at the screen centre and the panel sits at its bottom edge.
+Group #AISMidHud {
+  LayoutMode: Top;
+  Padding: (Full: 10);
+  Group #AISMidUpper {
+    FlexWeight: 1;
+    LayoutMode: Bottom;
+    Group #AISMidInner {
+      Group #AISMidOffset {
+        Group #AIStorageMiddle {
+          Visible: false;
+          Background: (Color: #000000(0.6));
+        }
+      }
+    }
+  }
+  Group #AISMidLower {
+    FlexWeight: 1;
+  }
+}

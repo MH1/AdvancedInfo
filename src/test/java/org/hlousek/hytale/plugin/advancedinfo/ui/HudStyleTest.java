@@ -62,6 +62,36 @@ class HudStyleTest {
     }
 
     @Test
+    void storageOpacityIsIndependentAndDefaultsToTheInfoPanel() {
+        assertEquals("#00000099", HudStyle.DEFAULT.storageBackgroundColor());
+        assertEquals("#00000099", new HudStyle(18, 60, 18, true).storageBackgroundColor());
+        HudStyle s = new HudStyle(18, 60, 18, true, 20);
+        assertEquals("#00000099", s.backgroundColor());
+        assertEquals("#00000033", s.storageBackgroundColor());
+        assertEquals(100, new HudStyle(18, 60, 18, true, 150).storageBackgroundOpacity());
+    }
+
+    @Test
+    void middlePanelGrowsOnlyAsNeededAndAtMostOneAndAHalfTimes() {
+        HudStyle s = HudStyle.DEFAULT;
+        int regular = s.storageItemsPerRow();
+        int widest  = s.storageItemsPerRow(Math.round(s.panelWidth() * HudStyle.STORAGE_MIDDLE_MAX_WIDTH));
+        assertTrue(widest > regular);
+
+        assertEquals(regular, s.storageMiddleColumns(0, 2));
+        assertEquals(regular, s.storageMiddleColumns(2 * regular, 2));
+        assertEquals(regular + 1, s.storageMiddleColumns(2 * regular + 1, 2));
+        assertEquals(widest, s.storageMiddleColumns(1000, 2));
+        assertEquals(regular, s.storageMiddleColumns(1000, 0));
+
+        assertEquals(s.panelWidth(), s.storagePanelWidth(regular));
+        assertEquals(s.panelWidth(), s.storagePanelWidth(1));
+        int grown = s.storagePanelWidth(regular + 1);
+        assertTrue(grown > s.panelWidth());
+        assertTrue(s.storagePanelWidth(widest) <= Math.round(s.panelWidth() * HudStyle.STORAGE_MIDDLE_MAX_WIDTH));
+    }
+
+    @Test
     void smallSizesNeverProduceZeroHeightBar() {
         assertTrue(new HudStyle(HudStyle.MIN_FONT_SIZE, 80).barHeight() >= 1);
     }

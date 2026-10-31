@@ -158,11 +158,13 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
         ui.set("#StorageOptions.Visible",    s.isStorageEnabled());
         ui.set("#DdStorageHAlign.Entries",   alignEntries("Left", "Center", "Right"));
         ui.set("#DdStorageHAlign.Value",     capitalize(s.getStorageHorizontalAlign().name()));
-        ui.set("#DdStorageVAlign.Entries",   alignEntries("Top", "Bottom"));
+        ui.set("#DdStorageVAlign.Entries",   alignEntries("Top", "Middle", "Bottom"));
         ui.set("#DdStorageVAlign.Value",     capitalize(s.getStorageVerticalAlign().name()));
         ui.set("#SlStorageMaxRows.Value",    s.getStorageMaxRows());
         ui.set("#SlStorageItemSize.Value",   s.getStorageItemSize());
         ui.set("#ChkStorageOutline.Value",   s.isStorageCountOutline());
+        ui.set("#ChkStorageFull.Value",      s.isStorageFullLabel());
+        ui.set("#SlStorageOpacity.Value",    s.getStorageBackgroundOpacity());
     }
 
     private static List<DropdownEntryInfo> alignEntries(String... values) {
@@ -210,6 +212,8 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
         bindNum   (events, "#SlStorageMaxRows",  "set_storage_max_rows");
         bindNum   (events, "#SlStorageItemSize", "set_storage_item_size");
         bindBool  (events, "#ChkStorageOutline", "toggle_storage_outline");
+        bindBool  (events, "#ChkStorageFull",    "toggle_storage_full");
+        bindNum   (events, "#SlStorageOpacity",  "set_storage_opacity");
         for (String tab : TABS) {
             bindClick(events, "#Tab" + tab, "tab_" + tab);
         }
@@ -336,7 +340,7 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
                 if (h != null) settings.setStorageHorizontalAlign(h);
             }
             case "set_storage_valign" -> {
-                VerticalAlign v = parseVAlign(val);
+                VerticalAlign v = "middle".equalsIgnoreCase(val) ? VerticalAlign.MIDDLE : parseVAlign(val);
                 if (v != null) settings.setStorageVerticalAlign(v);
             }
             case "set_storage_max_rows" -> {
@@ -346,6 +350,13 @@ public class SettingsPage extends InteractiveCustomUIPage<SettingsPage.EventData
                 } catch (NumberFormatException ignored) {}
             }
             case "toggle_storage_outline" -> settings.setStorageCountOutline(Boolean.parseBoolean(val));
+            case "toggle_storage_full"    -> settings.setStorageFullLabel(Boolean.parseBoolean(val));
+            case "set_storage_opacity" -> {
+                try {
+                    int percent = (int) Double.parseDouble(val);
+                    if (percent >= HudStyle.MIN_OPACITY && percent <= HudStyle.MAX_OPACITY) settings.setStorageBackgroundOpacity(percent);
+                } catch (NumberFormatException ignored) {}
+            }
             case "set_storage_item_size" -> {
                 try {
                     int size = (int) Double.parseDouble(val);

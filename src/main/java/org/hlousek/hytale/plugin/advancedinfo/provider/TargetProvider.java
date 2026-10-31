@@ -3,7 +3,11 @@ package org.hlousek.hytale.plugin.advancedinfo.provider;
 import com.hypixel.hytale.component.Ref;
 import com.hypixel.hytale.component.Store;
 import com.hypixel.hytale.server.core.asset.AssetModule;
+import com.hypixel.hytale.server.core.asset.type.blockhitbox.BlockBoundingBoxes;
+import com.hypixel.hytale.server.core.asset.type.blockhitbox.BlockBoundingBoxes.RotatedVariantBoxes;
 import com.hypixel.hytale.server.core.asset.type.blocktype.config.BlockType;
+import com.hypixel.hytale.server.core.asset.type.blocktype.config.farming.FarmingData;
+import com.hypixel.hytale.server.core.asset.type.blocktype.config.farming.FarmingStageData;
 import com.hypixel.hytale.server.core.asset.type.item.config.Item;
 import com.hypixel.hytale.server.core.modules.collision.CollisionMath;
 import com.hypixel.hytale.server.core.modules.entity.component.BoundingBox;
@@ -18,12 +22,16 @@ import com.hypixel.hytale.server.core.Message;
 import com.hypixel.hytale.server.core.modules.i18n.I18nModule;
 import com.hypixel.hytale.server.core.universe.PlayerRef;
 import com.hypixel.hytale.server.core.universe.world.World;
+import com.hypixel.hytale.builtin.adventure.farming.states.FarmingBlock;
 import com.hypixel.hytale.builtin.adventure.teleporter.component.Teleporter;
 import com.hypixel.hytale.builtin.crafting.component.BenchBlock;
+import com.hypixel.hytale.builtin.teleport.TeleportPlugin;
+import com.hypixel.hytale.builtin.teleport.Warp;
 import com.hypixel.hytale.server.core.inventory.ItemStack;
 import com.hypixel.hytale.server.core.inventory.container.ItemContainer;
 import com.hypixel.hytale.server.core.modules.block.components.ItemContainerBlock;
 import com.hypixel.hytale.builtin.path.entities.PatrolPathMarkerEntity;
+import com.hypixel.hytale.math.shape.Box;
 import com.hypixel.hytale.math.util.ChunkUtil;
 import com.hypixel.hytale.server.core.universe.world.chunk.section.BlockComponentSection;
 import com.hypixel.hytale.server.core.universe.world.chunk.section.BlockSection;
@@ -41,13 +49,14 @@ import org.joml.Vector3d;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Resolves the entity or block the player is looking at.
  *
  * <p>Entities within {@link #RANGE} blocks are tested first by ray/AABB intersection;
- * when none is hit the targeted block is used instead. A targeted storage block also
- * reports its contents.
+ * when none is hit the first block whose hitbox the look ray crosses is used instead.
+ * A targeted storage block also reports its contents.
  */
 public final class TargetProvider {
 
@@ -183,9 +192,7 @@ public final class TargetProvider {
     // Blocks
     // -------------------------------------------------------------------------
 
-    private static final double RAY_STEP = 0.1;
-
-    /** A non-empty block found along the look ray. */
+    /** A block whose hitbox the look ray crosses. */
     private record BlockHit(@Nonnull BlockType type, int x, int y, int z) {}
 
     @Nullable
@@ -201,11 +208,11 @@ public final class TargetProvider {
 
         String text = blockDisplayName(ctx.language(), hit.type());
         Ref<ChunkStore> blockRef = blockEntityRef(chunkStore, hit);
-        String detail = blockRef != null ? blockEntityDetail(chunkStore.getStore(), blockRef) : null;
+        String detail = blockRef != null ? blockEntityDetail(chunkStore.getStore(), blockRef, hit.type()) : null;
         if (detail != null) {
             text = text + " [" + detail + "]";
         }
-        List<StorageItem> storage = null;
+        StorageContents storage = null;
         if (blockRef != null && isStorage(chunkStore.getStore(), blockRef)
             && storageAccess.canView(ctx.playerRef(), world, hit.x(), hit.z(), hit.type().getId())) {
             storage = storageContents(chunkStore.getStore(), blockRef);
@@ -215,9 +222,11 @@ public final class TargetProvider {
     }
 
     /**
-     * Marches from the eye along the look direction and returns the first non-empty block
-     * within {@link #RANGE}. TargetUtil's block targeting reports the placement position
-     * (the empty block before the hit), which is not what we want to describe.
+     * Walks the look ray cell by cell (Amanatides-Woo) and returns the first block whose hitbox
+     * the ray crosses within {@link #RANGE}. Testing the hitbox instead of the whole cell lets
+     * the ray pass thin blocks such as torches, the way the client's own targeting does.
+     * TargetUtil's block targeting reports the placement position (the empty block before the
+     * hit), which is not what we want to describe.
      */
     @Nullable
     private static BlockHit firstBlockAlongRay(@Nonnull ChunkStore chunkStore, @Nonnull Vector3d eyePos, @Nonnull Vector3d lookDir) {
@@ -225,18 +234,94 @@ public final class TargetProvider {
         if (dir.lengthSquared() == 0) { return null; }
         dir.normalize();
 
-        int lastX = Integer.MIN_VALUE, lastY = Integer.MIN_VALUE, lastZ = Integer.MIN_VALUE;
-        for (double t = 0; t <= RANGE; t += RAY_STEP) {
-            int x = (int) Math.floor(eyePos.x + dir.x * t);
-            int y = (int) Math.floor(eyePos.y + dir.y * t);
-            int z = (int) Math.floor(eyePos.z + dir.z * t);
-            if (x == lastX && y == lastY && z == lastZ) { continue; }
-            lastX = x; lastY = y; lastZ = z;
+        int x = (int) Math.floor(eyePos.x), y = (int) Math.floor(eyePos.y), z = (int) Math.floor(eyePos.z);
+        int stepX = Double.compare(dir.x, 0.0), stepY = Double.compare(dir.y, 0.0), stepZ = Double.compare(dir.z, 0.0);
+        double tDeltaX = stepX == 0 ? Double.POSITIVE_INFINITY : Math.abs(1.0 / dir.x);
+        double tDeltaY = stepY == 0 ? Double.POSITIVE_INFINITY : Math.abs(1.0 / dir.y);
+        double tDeltaZ = stepZ == 0 ? Double.POSITIVE_INFINITY : Math.abs(1.0 / dir.z);
+        double tMaxX = nextBoundary(eyePos.x, x, dir.x, stepX);
+        double tMaxY = nextBoundary(eyePos.y, y, dir.y, stepY);
+        double tMaxZ = nextBoundary(eyePos.z, z, dir.z, stepZ);
 
-            BlockType blockType = blockTypeAt(chunkStore, x, y, z);
-            if (blockType != null) { return new BlockHit(blockType, x, y, z); }
+        for (double t = 0; t <= RANGE; ) {
+            BlockHit hit = hitInCell(chunkStore, eyePos, dir, x, y, z);
+            if (hit != null) { return hit; }
+            if (tMaxX < tMaxY && tMaxX < tMaxZ) { t = tMaxX; tMaxX += tDeltaX; x += stepX; }
+            else if (tMaxY < tMaxZ)            { t = tMaxY; tMaxY += tDeltaY; y += stepY; }
+            else                               { t = tMaxZ; tMaxZ += tDeltaZ; z += stepZ; }
         }
         return null;
+    }
+
+    /** Ray parameter at which the ray leaves the current cell along one axis. */
+    private static double nextBoundary(double origin, int cell, double dir, int step) {
+        if (step == 0) { return Double.POSITIVE_INFINITY; }
+        return step > 0 ? (cell + 1 - origin) / dir : (origin - cell) / -dir;
+    }
+
+    /**
+     * The block in a cell when the ray crosses its hitbox within range; null for air, a miss or an
+     * unloaded chunk. Multi-block structures keep their hitbox on the base block, so a filler cell is
+     * tested against the base block's boxes at the base position.
+     */
+    @Nullable
+    private static BlockHit hitInCell(
+        @Nonnull ChunkStore chunkStore, @Nonnull Vector3d eyePos, @Nonnull Vector3d dir, int x, int y, int z
+    ) {
+        BlockSection section = blockSectionAt(chunkStore, x, y, z);
+        if (section == null) { return null; }
+        BlockType type = blockTypeIn(section, x, y, z);
+        if (type == null) { return null; }
+
+        int bx = x, by = y, bz = z;
+        BlockSection baseSection = section;
+        BlockType baseType = type;
+        int filler = section.getFiller(x, y, z);
+        if (filler != 0) {
+            bx -= FillerBlockUtil.unpackX(filler);
+            by -= FillerBlockUtil.unpackY(filler);
+            bz -= FillerBlockUtil.unpackZ(filler);
+            baseSection = blockSectionAt(chunkStore, bx, by, bz);
+            BlockType resolved = baseSection != null ? blockTypeIn(baseSection, bx, by, bz) : null;
+            if (resolved != null) { baseType = resolved; } else { baseSection = section; bx = x; by = y; bz = z; }
+        }
+
+        RotatedVariantBoxes boxes = hitbox(baseType, baseSection.getRotationIndex(bx, by, bz));
+        if (boxes == null) { return new BlockHit(type, x, y, z); }
+        double distance = rayDistance(eyePos, dir, bx, by, bz, boxes);
+        return distance >= 0 && distance <= RANGE ? new BlockHit(type, x, y, z) : null;
+    }
+
+    /** The block's hitbox for its rotation; null when the hitbox asset cannot be resolved (treated as a full cell). */
+    @Nullable
+    private static RotatedVariantBoxes hitbox(@Nonnull BlockType type, int rotationIndex) {
+        try {
+            BlockBoundingBoxes boxes = BlockBoundingBoxes.getAssetMap().getAsset(type.getHitboxTypeIndex());
+            return boxes != null ? boxes.get(rotationIndex) : null;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Distance along the ray to the nearest of the block's boxes placed at the block position,
+     * or -1 when the ray misses them all. Boxes are in block-local coordinates (0..1 for a full cell).
+     */
+    private static double rayDistance(
+        @Nonnull Vector3d eyePos, @Nonnull Vector3d dir, int x, int y, int z, @Nonnull RotatedVariantBoxes boxes
+    ) {
+        Box[] detail = boxes.getDetailBoxes();
+        if (detail == null || detail.length == 0) {
+            Box bounding = boxes.getBoundingBox();
+            if (bounding == null) { return -1; }
+            detail = new Box[] { bounding };
+        }
+        double best = -1;
+        for (Box box : detail) {
+            double d = CollisionMath.intersectRayAABB(eyePos, dir, x, y, z, box);
+            if (d >= 0 && (best < 0 || d < best)) { best = d; }
+        }
+        return best;
     }
 
     @Nullable
@@ -246,12 +331,9 @@ public final class TargetProvider {
         return chunkStore.getStore().getComponent(sectionRef, BlockSection.getComponentType());
     }
 
-    /** Reads the block type at a world position from the loaded chunk section; null for air/unknown/unloaded. */
+    /** The block type at a world position inside the section; null for air and unknown blocks. */
     @Nullable
-    private static BlockType blockTypeAt(@Nonnull ChunkStore chunkStore, int x, int y, int z) {
-        BlockSection section = blockSectionAt(chunkStore, x, y, z);
-        if (section == null) { return null; }
-
+    private static BlockType blockTypeIn(@Nonnull BlockSection section, int x, int y, int z) {
         int blockId = section.get(x, y, z);
         if (blockId == BlockType.EMPTY_ID) { return null; }
         BlockType blockType = BlockType.getAssetMap().getAsset(blockId);
@@ -284,38 +366,76 @@ public final class TargetProvider {
         return blockRef != null && blockRef.isValid() ? blockRef : null;
     }
 
-    /** Extra information carried by the block's entity (bench tier, teleporter destination). */
+    /** Extra information carried by the block's entity (bench tier, growth stage, teleporter destination). */
     @Nullable
-    private static String blockEntityDetail(@Nonnull Store<ChunkStore> store, @Nonnull Ref<ChunkStore> blockRef) {
+    private static String blockEntityDetail(
+        @Nonnull Store<ChunkStore> store, @Nonnull Ref<ChunkStore> blockRef, @Nonnull BlockType type
+    ) {
         BenchBlock bench = store.getComponent(blockRef, BenchBlock.getComponentType());
         if (bench != null) {
             return "Tier " + bench.getTierLevel();
         }
+        FarmingBlock farming = store.getComponent(blockRef, FarmingBlock.getComponentType());
+        if (farming != null) {
+            GrowthStage stage = growthStage(farming, type);
+            if (stage != null) { return stage.label(); }
+        }
         Teleporter teleporter = store.getComponent(blockRef, Teleporter.getComponentType());
         if (teleporter != null) {
-            if (!isBlank(teleporter.getWarp())) { return teleporter.getWarp(); }
-            if (teleporter.hasOwnedWarp())      { return teleporter.getOwnedWarp(); }
+            if (!isBlank(teleporter.getWarp())) { return warpDisplayName(teleporter.getWarp()); }
+            if (teleporter.hasOwnedWarp())      { return warpDisplayName(teleporter.getOwnedWarp()); }
         }
         return null;
+    }
+
+    /**
+     * The stage a growing crop currently shows. The farming tick keeps the index of that stage in the
+     * growth progress and removes the component once the last stage is done; a crop whose state block
+     * carries no farming config inherits it from the block type it grew from.
+     */
+    @Nullable
+    private static GrowthStage growthStage(@Nonnull FarmingBlock farming, @Nonnull BlockType type) {
+        FarmingData data = type.getFarming();
+        if (data == null && !isBlank(farming.getPreviousBlockType())) {
+            BlockType previous = BlockType.getAssetMap().getAsset(farming.getPreviousBlockType());
+            data = previous != null ? previous.getFarming() : null;
+        }
+        if (data == null || data.getStages() == null) { return null; }
+        String stageSet = !isBlank(farming.getCurrentStageSet()) ? farming.getCurrentStageSet() : data.getStartingStageSet();
+        FarmingStageData[] stages = stageSet != null ? data.getStages().get(stageSet) : null;
+        if (stages == null) { return null; }
+        return new GrowthStage((int) farming.getGrowthProgress(), stages.length);
+    }
+
+    /** The warp id as it was registered; teleporters keep only the lower-case lookup key. */
+    @Nonnull
+    private static String warpDisplayName(@Nonnull String warp) {
+        TeleportPlugin plugin = TeleportPlugin.get();
+        if (plugin == null || !plugin.isWarpsLoaded()) { return warp; }
+        Warp registered = plugin.getWarps().get(warp.toLowerCase(Locale.ROOT));
+        return registered != null && !isBlank(registered.getId()) ? registered.getId() : warp;
     }
 
     private static boolean isStorage(@Nonnull Store<ChunkStore> store, @Nonnull Ref<ChunkStore> blockRef) {
         return store.getComponent(blockRef, ItemContainerBlock.getComponentType()) != null;
     }
 
-    /** Summed contents of a storage block (chest, barrel, ...); null when the block stores nothing. */
+    /** Contents of a storage block (chest, barrel, ...); null when the block stores nothing. */
     @Nullable
-    private static List<StorageItem> storageContents(@Nonnull Store<ChunkStore> store, @Nonnull Ref<ChunkStore> blockRef) {
+    private static StorageContents storageContents(@Nonnull Store<ChunkStore> store, @Nonnull Ref<ChunkStore> blockRef) {
         ItemContainerBlock containerBlock = store.getComponent(blockRef, ItemContainerBlock.getComponentType());
         if (containerBlock == null) { return null; }
         ItemContainer container = containerBlock.getItemContainer();
         if (container == null) { return null; }
 
-        StorageItem.Summary summary = new StorageItem.Summary();
+        StorageContents.Builder contents = new StorageContents.Builder(container.getCapacity());
         container.forEach((slot, stack) -> {
-            if (!ItemStack.isEmpty(stack)) { summary.add(stack.getItemId(), stack.getQuantity()); }
+            if (ItemStack.isEmpty(stack)) { return; }
+            Item item = stack.getItem();
+            int maxStack = item != null ? item.getMaxStack() : stack.getQuantity();
+            contents.addStack(stack.getItemId(), stack.getQuantity(), maxStack);
         });
-        return summary.toList();
+        return contents.build();
     }
 
     @Nonnull

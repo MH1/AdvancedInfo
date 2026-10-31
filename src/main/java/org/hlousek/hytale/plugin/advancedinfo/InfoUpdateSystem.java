@@ -88,8 +88,8 @@ public class InfoUpdateSystem extends EntityTickingSystem<EntityStore> {
         TargetInfo resolved   = target.isEnabled(settings) || storageEnabled ? target.resolve(ctx) : TargetInfo.NONE;
         TargetInfo targetInfo = target.isEnabled(settings) ? resolved : TargetInfo.NONE;
         StoragePanel storage  = storageEnabled && resolved.storage() != null
-            ? new StoragePanel(resolved.storage(), settings.getStorageMaxRows(),
-                settings.getStorageHorizontalAlign(), settings.getStorageVerticalAlign())
+            ? new StoragePanel(resolved.storage().items(), settings.isStorageFullLabel() && resolved.storage().full(),
+                settings.getStorageMaxRows(), settings.getStorageHorizontalAlign(), settings.getStorageVerticalAlign())
             : null;
 
         if (!anyRowEnabled && storage == null) {
